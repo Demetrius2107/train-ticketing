@@ -38,4 +38,17 @@
     where daily_train_id = #{dailyTrainId,jdbcType=BIGINT}
     order by carriage_id, seat_index, seat_label
   </select>
+  <select id="selectRemainingByInterval" resultType="com.trainticketing.business.resp.SeatRemainingResp">
+    select s.seat_type as seatType, count(*) as remainingCount
+    from daily_train_seat s
+    left join train_order o on o.daily_train_id = s.daily_train_id and o.status = '1'
+    left join train_order_item oi on oi.order_id = o.id and oi.daily_train_seat_id = s.id
+      and oi.depart_index &lt;= #{arriveIndex,jdbcType=INTEGER}
+      and oi.arrive_index &gt;= #{departIndex,jdbcType=INTEGER}
+    where s.daily_train_id = #{dailyTrainId,jdbcType=BIGINT}
+      and s.sale_status = '0'
+      and oi.id is null
+    group by s.seat_type
+    order by s.seat_type
+  </select>
 </mapper>

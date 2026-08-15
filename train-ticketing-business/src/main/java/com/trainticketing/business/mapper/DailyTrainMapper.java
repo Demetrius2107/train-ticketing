@@ -52,6 +52,18 @@ public interface DailyTrainMapper {
   List<DailyTrain> selectList(@Param("trainId") Long trainId, @Param("runDate") LocalDate runDate);
 
   /**
+   * 查询某天运行中、且同时经过出发站与到达站（站序正确）的排班列表（用户侧余票查询用）
+   *
+   * @param fromStationId 出发站id
+   * @param toStationId   到达站id
+   * @param runDate       运行日期
+   * @return 排班列表
+   */
+  List<DailyTrain> selectByStationsAndDate(@Param("fromStationId") Long fromStationId,
+                                           @Param("toStationId") Long toStationId,
+                                           @Param("runDate") LocalDate runDate);
+
+  /**
    * 更新排班状态（停运/恢复运行）
    *
    * @param id     排班ID
