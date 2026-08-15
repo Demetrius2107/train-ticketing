@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.business.mapper.TrainSeatMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.business.domain.TrainSeat">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="train_id" jdbcType="BIGINT" property="trainId" />
+    <result column="carriage_id" jdbcType="BIGINT" property="carriageId" />
+    <result column="seat_index" jdbcType="INTEGER" property="seatIndex" />
+    <result column="seat_label" jdbcType="CHAR" property="seatLabel" />
+    <result column="seat_type" jdbcType="CHAR" property="seatType" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, train_id, carriage_id, seat_index, seat_label, seat_type, create_time, update_time
+  </sql>
+  <insert id="insertBatch" parameterType="java.util.List">
+    insert into train_seat (id, train_id, carriage_id, seat_index, seat_label, seat_type, create_time, update_time)
+    values
+    <foreach collection="list" item="item" separator=",">
+      (#{item.id,jdbcType=BIGINT}, #{item.trainId,jdbcType=BIGINT}, #{item.carriageId,jdbcType=BIGINT},
+      #{item.seatIndex,jdbcType=INTEGER}, #{item.seatLabel,jdbcType=CHAR}, #{item.seatType,jdbcType=CHAR},
+      #{item.createTime,jdbcType=TIMESTAMP}, #{item.updateTime,jdbcType=TIMESTAMP})
+    </foreach>
+  </insert>
+  <select id="selectCountByCarriageId" resultType="int">
+    select count(1)
+    from train_seat
+    where carriage_id = #{carriageId,jdbcType=BIGINT}
+  </select>
+  <select id="selectByTrainId" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_seat
+    where train_id = #{trainId,jdbcType=BIGINT}
+    order by carriage_id, seat_index, seat_label
+  </select>
+</mapper>

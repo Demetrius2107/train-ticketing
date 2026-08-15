@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.business.mapper.TrainStationMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.business.domain.TrainStation">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="train_id" jdbcType="BIGINT" property="trainId" />
+    <result column="station_id" jdbcType="BIGINT" property="stationId" />
+    <result column="station_index" jdbcType="INTEGER" property="stationIndex" />
+    <result column="arrive_time" jdbcType="TIME" property="arriveTime" />
+    <result column="leave_time" jdbcType="TIME" property="leaveTime" />
+    <result column="stop_minutes" jdbcType="INTEGER" property="stopMinutes" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, train_id, station_id, station_index, arrive_time, leave_time, stop_minutes, create_time, update_time
+  </sql>
+  <insert id="insert" parameterType="com.trainticketing.business.domain.TrainStation">
+    insert into train_station (id, train_id, station_id, station_index, arrive_time, leave_time, stop_minutes, create_time, update_time)
+    values (#{id,jdbcType=BIGINT}, #{trainId,jdbcType=BIGINT}, #{stationId,jdbcType=BIGINT},
+    #{stationIndex,jdbcType=INTEGER}, #{arriveTime,jdbcType=TIME}, #{leaveTime,jdbcType=TIME},
+    #{stopMinutes,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP})
+  </insert>
+  <select id="selectByTrainId" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_station
+    where train_id = #{trainId,jdbcType=BIGINT}
+    order by station_index
+  </select>
+  <select id="selectByIndex" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_station
+    where train_id = #{trainId,jdbcType=BIGINT} and station_index = #{stationIndex,jdbcType=INTEGER}
+    limit 1
+  </select>
+  <select id="selectByStation" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_station
+    where train_id = #{trainId,jdbcType=BIGINT} and station_id = #{stationId,jdbcType=BIGINT}
+    limit 1
+  </select>
+  <delete id="deleteById">
+    delete from train_station where id = #{id,jdbcType=BIGINT}
+  </delete>
+</mapper>

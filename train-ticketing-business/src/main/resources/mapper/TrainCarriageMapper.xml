@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.business.mapper.TrainCarriageMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.business.domain.TrainCarriage">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="train_id" jdbcType="BIGINT" property="trainId" />
+    <result column="carriage_index" jdbcType="INTEGER" property="carriageIndex" />
+    <result column="seat_type" jdbcType="CHAR" property="seatType" />
+    <result column="seat_count" jdbcType="INTEGER" property="seatCount" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, train_id, carriage_index, seat_type, seat_count, create_time, update_time
+  </sql>
+  <insert id="insert" parameterType="com.trainticketing.business.domain.TrainCarriage">
+    insert into train_carriage (id, train_id, carriage_index, seat_type, seat_count, create_time, update_time)
+    values (#{id,jdbcType=BIGINT}, #{trainId,jdbcType=BIGINT}, #{carriageIndex,jdbcType=INTEGER},
+    #{seatType,jdbcType=CHAR}, #{seatCount,jdbcType=INTEGER},
+    #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP})
+  </insert>
+  <select id="selectByTrainId" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_carriage
+    where train_id = #{trainId,jdbcType=BIGINT}
+    order by carriage_index
+  </select>
+  <select id="selectByIndex" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_carriage
+    where train_id = #{trainId,jdbcType=BIGINT} and carriage_index = #{carriageIndex,jdbcType=INTEGER}
+    limit 1
+  </select>
+  <select id="selectById" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_carriage
+    where id = #{id,jdbcType=BIGINT}
+    limit 1
+  </select>
+  <delete id="deleteById">
+    delete from train_carriage where id = #{id,jdbcType=BIGINT}
+  </delete>
+</mapper>

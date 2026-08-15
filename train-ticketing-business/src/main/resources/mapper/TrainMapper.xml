@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.business.mapper.TrainMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.business.domain.Train">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="code" jdbcType="VARCHAR" property="code" />
+    <result column="type" jdbcType="CHAR" property="type" />
+    <result column="start_station_id" jdbcType="BIGINT" property="startStationId" />
+    <result column="end_station_id" jdbcType="BIGINT" property="endStationId" />
+    <result column="start_time" jdbcType="TIME" property="startTime" />
+    <result column="end_time" jdbcType="TIME" property="endTime" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, code, type, start_station_id, end_station_id, start_time, end_time, create_time, update_time
+  </sql>
+  <insert id="insert" parameterType="com.trainticketing.business.domain.Train">
+    insert into train (id, code, type, start_station_id, end_station_id, start_time, end_time, create_time, update_time)
+    values (#{id,jdbcType=BIGINT}, #{code,jdbcType=VARCHAR}, #{type,jdbcType=CHAR},
+    #{startStationId,jdbcType=BIGINT}, #{endStationId,jdbcType=BIGINT},
+    #{startTime,jdbcType=TIME}, #{endTime,jdbcType=TIME},
+    #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP})
+  </insert>
+  <select id="selectByCode" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train
+    where code = #{code,jdbcType=VARCHAR}
+    limit 1
+  </select>
+  <select id="selectById" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train
+    where id = #{id,jdbcType=BIGINT}
+    limit 1
+  </select>
+  <select id="selectList" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train
+    <where>
+      <if test="keyword != null and keyword != ''">
+        and code like concat('%', #{keyword,jdbcType=VARCHAR}, '%')
+      </if>
+    </where>
+    order by code
+  </select>
+  <delete id="deleteById">
+    delete from train where id = #{id,jdbcType=BIGINT}
+  </delete>
+</mapper>
