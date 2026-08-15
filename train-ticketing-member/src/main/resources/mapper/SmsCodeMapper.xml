@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.member.mapper.SmsCodeMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.member.domain.SmsCode">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="mobile" jdbcType="VARCHAR" property="mobile" />
+    <result column="code" jdbcType="VARCHAR" property="code" />
+    <result column="type" jdbcType="VARCHAR" property="type" />
+    <result column="expired_at" jdbcType="TIMESTAMP" property="expiredAt" />
+    <result column="used_flag" jdbcType="CHAR" property="usedFlag" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="use_time" jdbcType="TIMESTAMP" property="useTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, mobile, code, type, expired_at, used_flag, create_time, use_time
+  </sql>
+  <insert id="insert" parameterType="com.trainticketing.member.domain.SmsCode">
+    insert into sms_code (id, mobile, code, type, expired_at, used_flag, create_time, use_time)
+    values (#{id,jdbcType=BIGINT}, #{mobile,jdbcType=VARCHAR}, #{code,jdbcType=VARCHAR},
+    #{type,jdbcType=VARCHAR}, #{expiredAt,jdbcType=TIMESTAMP}, #{usedFlag,jdbcType=CHAR},
+    #{createTime,jdbcType=TIMESTAMP}, #{useTime,jdbcType=TIMESTAMP})
+  </insert>
+  <select id="selectLatestUnusedByMobile" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from sms_code
+    where mobile = #{mobile,jdbcType=VARCHAR} and type = #{type,jdbcType=VARCHAR} and used_flag = '0'
+    order by create_time desc
+    limit 1
+  </select>
+  <update id="markUsed">
+    update sms_code
+    set used_flag = '1', use_time = #{useTime,jdbcType=TIMESTAMP}
+    where id = #{id,jdbcType=BIGINT}
+  </update>
+</mapper>
