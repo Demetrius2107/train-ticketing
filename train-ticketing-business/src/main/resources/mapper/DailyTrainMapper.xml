@@ -30,6 +30,13 @@
     where train_id = #{trainId,jdbcType=BIGINT} and run_date = #{runDate,jdbcType=DATE}
     limit 1
   </select>
+  <select id="selectById" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from daily_train
+    where id = #{id,jdbcType=BIGINT}
+    limit 1
+  </select>
   <select id="selectList" resultMap="BaseResultMap">
     select
     <include refid="Base_Column_List" />

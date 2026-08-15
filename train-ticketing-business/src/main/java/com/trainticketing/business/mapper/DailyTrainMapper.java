@@ -35,6 +35,14 @@ public interface DailyTrainMapper {
   DailyTrain selectByTrainAndDate(@Param("trainId") Long trainId, @Param("runDate") LocalDate runDate);
 
   /**
+   * 按主键查询排班（当日座位生成时校验引用用）
+   *
+   * @param id 排班ID
+   * @return 排班，不存在返回 null
+   */
+  DailyTrain selectById(@Param("id") Long id);
+
+  /**
    * 按车次/日期动态查询排班列表
    *
    * @param trainId 车次ID，可空
