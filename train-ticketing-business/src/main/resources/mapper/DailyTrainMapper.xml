@@ -30,6 +30,13 @@
     where train_id = #{trainId,jdbcType=BIGINT} and run_date = #{runDate,jdbcType=DATE}
     limit 1
   </select>
+  <select id="selectById" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from daily_train
+    where id = #{id,jdbcType=BIGINT}
+    limit 1
+  </select>
   <select id="selectList" resultMap="BaseResultMap">
     select
     <include refid="Base_Column_List" />
@@ -43,6 +50,17 @@
       </if>
     </where>
     order by run_date, train_id
+  </select>
+  <select id="selectByStationsAndDate" resultMap="BaseResultMap">
+    select dt.id, dt.train_id, dt.run_date, dt.start_station_id, dt.end_station_id,
+    dt.start_time, dt.end_time, dt.status, dt.create_time, dt.update_time
+    from daily_train dt
+    join train_station ts_from on ts_from.train_id = dt.train_id and ts_from.station_id = #{fromStationId,jdbcType=BIGINT}
+    join train_station ts_to on ts_to.train_id = dt.train_id and ts_to.station_id = #{toStationId,jdbcType=BIGINT}
+    where dt.run_date = #{runDate,jdbcType=DATE}
+      and dt.status = '1'
+      and ts_from.station_index &lt; ts_to.station_index
+    order by dt.start_time
   </select>
   <update id="updateStatus">
     update daily_train

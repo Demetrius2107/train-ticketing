@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.business.mapper.DailyTrainSeatMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.business.domain.DailyTrainSeat">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="daily_train_id" jdbcType="BIGINT" property="dailyTrainId" />
+    <result column="train_seat_id" jdbcType="BIGINT" property="trainSeatId" />
+    <result column="carriage_id" jdbcType="BIGINT" property="carriageId" />
+    <result column="seat_index" jdbcType="INTEGER" property="seatIndex" />
+    <result column="seat_label" jdbcType="CHAR" property="seatLabel" />
+    <result column="seat_type" jdbcType="CHAR" property="seatType" />
+    <result column="sale_status" jdbcType="CHAR" property="saleStatus" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, daily_train_id, train_seat_id, carriage_id, seat_index, seat_label, seat_type, sale_status, create_time, update_time
+  </sql>
+  <insert id="insertBatch" parameterType="java.util.List">
+    insert into daily_train_seat (id, daily_train_id, train_seat_id, carriage_id, seat_index, seat_label, seat_type, sale_status, create_time, update_time)
+    values
+    <foreach collection="list" item="item" separator=",">
+      (#{item.id,jdbcType=BIGINT}, #{item.dailyTrainId,jdbcType=BIGINT}, #{item.trainSeatId,jdbcType=BIGINT},
+      #{item.carriageId,jdbcType=BIGINT}, #{item.seatIndex,jdbcType=INTEGER}, #{item.seatLabel,jdbcType=CHAR},
+      #{item.seatType,jdbcType=CHAR}, #{item.saleStatus,jdbcType=CHAR},
+      #{item.createTime,jdbcType=TIMESTAMP}, #{item.updateTime,jdbcType=TIMESTAMP})
+    </foreach>
+  </insert>
+  <select id="selectCountByDailyTrainId" resultType="int">
+    select count(1)
+    from daily_train_seat
+    where daily_train_id = #{dailyTrainId,jdbcType=BIGINT}
+  </select>
+  <select id="selectByDailyTrainId" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from daily_train_seat
+    where daily_train_id = #{dailyTrainId,jdbcType=BIGINT}
+    order by carriage_id, seat_index, seat_label
+  </select>
+  <select id="selectRemainingByInterval" resultType="com.trainticketing.business.resp.SeatRemainingResp">
+    select s.seat_type as seatType, count(*) as remainingCount
+    from daily_train_seat s
+    left join train_order o on o.daily_train_id = s.daily_train_id and o.status = '1'
+    left join train_order_item oi on oi.order_id = o.id and oi.daily_train_seat_id = s.id
+      and oi.depart_index &lt;= #{arriveIndex,jdbcType=INTEGER}
+      and oi.arrive_index &gt;= #{departIndex,jdbcType=INTEGER}
+    where s.daily_train_id = #{dailyTrainId,jdbcType=BIGINT}
+      and s.sale_status = '0'
+      and oi.id is null
+    group by s.seat_type
+    order by s.seat_type
+  </select>
+</mapper>
