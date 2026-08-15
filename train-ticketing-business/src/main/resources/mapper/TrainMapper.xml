@@ -29,6 +29,13 @@
     where code = #{code,jdbcType=VARCHAR}
     limit 1
   </select>
+  <select id="selectById" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train
+    where id = #{id,jdbcType=BIGINT}
+    limit 1
+  </select>
   <select id="selectList" resultMap="BaseResultMap">
     select
     <include refid="Base_Column_List" />

@@ -33,6 +33,14 @@ public interface TrainMapper {
   Train selectByCode(@Param("code") String code);
 
   /**
+   * 按主键查询车次（经停站/车厢保存时校验引用用）
+   *
+   * @param id 车次ID
+   * @return 车次，不存在返回 null
+   */
+  Train selectById(@Param("id") Long id);
+
+  /**
    * 按关键字模糊查询车次列表（车次编号）
    *
    * @param keyword 查询关键字，为空返回全部
