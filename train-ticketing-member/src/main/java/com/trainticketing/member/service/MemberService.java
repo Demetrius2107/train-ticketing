@@ -90,10 +90,18 @@ public class MemberService {
       throw new BusinessException(BusinessExceptionEnum.MEMBER_MOBILE_NOT_EXIST);
     }
 
-    //校验短信验证码
-    if(!"8888".equals(code)){
+    //校验短信验证码：取该手机号最新一条未使用的验证码
+    SmsCode smsCode = smsCodeMapper.selectLatestUnusedByMobile(mobile, "LOGIN");
+    //验证码不存在或不匹配
+    if (ObjectUtil.isNull(smsCode) || !code.equals(smsCode.getCode())) {
       throw new BusinessException(BusinessExceptionEnum.MEMBER_MOBILE_CODE_ERROR);
     }
+    //验证码已过期
+    if (smsCode.getExpiredAt().before(new Date())) {
+      throw new BusinessException(BusinessExceptionEnum.MEMBER_MOBILE_CODE_EXPIRED);
+    }
+    //验证码校验通过，标记已使用
+    smsCodeMapper.markUsed(smsCode.getId(), new Date());
     return BeanUtil.copyProperties(memberDB,MemberLoginResp.class);
 
   }
