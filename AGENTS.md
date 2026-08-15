@@ -60,7 +60,7 @@ mvn -q -DskipTests compile
 
 - `master` 为受保护主干，由用户手动合并；日常从 master 迁出 `feat/<功能>`、`fix/<缺陷>` 分支迭代
 - commit 遵循 Conventional Commits（`fix/feat/docs/refactor/chore` 前缀，中文正文）
-- **commit 信息不要带 `Co-Authored-By: AtomCode` 尾注**（用户明确要求）
+- **commit 信息一律不要出现 atomcode 字样**（不带 `Co-Authored-By: AtomCode` 尾注，主题/正文也不提及；用户明确要求）
 - 提交前先 `git status` 确认暂存范围，提交后工作区保持干净
 
 ## 8. 文档索引
