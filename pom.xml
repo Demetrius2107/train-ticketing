@@ -20,6 +20,7 @@
     <module>train-ticketing-common</module>
     <module>train-ticketing-gateway</module>
     <module>train-ticketing-generator</module>
+    <module>train-ticketing-business</module>
   </modules>
   <properties>
     <java.version>21</java.version>
