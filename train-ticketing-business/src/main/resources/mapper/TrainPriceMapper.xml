@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.business.mapper.TrainPriceMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.business.domain.TrainPrice">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="train_id" jdbcType="BIGINT" property="trainId" />
+    <result column="seat_type" jdbcType="CHAR" property="seatType" />
+    <result column="price" jdbcType="DECIMAL" property="price" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, train_id, seat_type, price, create_time, update_time
+  </sql>
+  <insert id="insert" parameterType="com.trainticketing.business.domain.TrainPrice">
+    insert into train_price (id, train_id, seat_type, price, create_time, update_time)
+    values (#{id,jdbcType=BIGINT}, #{trainId,jdbcType=BIGINT}, #{seatType,jdbcType=CHAR},
+    #{price,jdbcType=DECIMAL}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP})
+  </insert>
+  <select id="selectByTrainId" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_price
+    where train_id = #{trainId,jdbcType=BIGINT}
+    order by seat_type
+  </select>
+  <select id="selectByTrainAndType" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_price
+    where train_id = #{trainId,jdbcType=BIGINT} and seat_type = #{seatType,jdbcType=CHAR}
+    limit 1
+  </select>
+  <delete id="deleteById">
+    delete from train_price where id = #{id,jdbcType=BIGINT}
+  </delete>
+</mapper>
