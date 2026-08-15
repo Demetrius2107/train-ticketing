@@ -36,7 +36,7 @@
 ## 🚀 快速开始
 
 1. 依赖：JDK 21、Maven 3.9+、MySQL 8（前端需要 Node 16+）。
-2. 初始化数据库：执行 `sql/train-ticketing.sql`，自动建库 `train_ticketing` 并创建全部表。
+2. 初始化数据库：执行 `script/sql/train-ticketing.sql`，自动建库 `train_ticketing` 并创建全部表。
 3. 修改 `train-ticketing-member/src/main/resources/application.properties` 中的数据库账号密码。
 4. 启动后端：
    ```bash
@@ -62,9 +62,15 @@
 
 ## 🗄 数据库设计
 
-见 `sql/train-ticketing.sql`（13 张表，全量注释）。
+见 `script/sql/train-ticketing.sql`（13 张表，全量注释）。
 
 核心是**区间占用余票模型**：12306 的余票不是「车次总票数 - 已售」，而是一张 A→C 的票同时占用 A-B、B-C 两个区间，某区间余票 = 该区间内未被售出的座位数。`train_order_item` 通过 `depart_index / arrive_index` 记录每个座位的占用区间，是后续防超卖与座位分配算法的基础。
+
+## 📚 文档
+
+- [架构说明](docs/architecture.md)
+- [数据库设计](docs/database.md)
+- [开发规范](AGENTS.md)
 
 ## 📄 License
 

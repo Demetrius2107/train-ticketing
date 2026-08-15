@@ -1,0 +1,2 @@
+- train-ticketing：GitHub 远端已从 12306-train-system 改名并切默认分支为 master（main 未删暂缓），但本地文件夹仍叫 F:/PersonalProject-Demetrius/12306-train-system（用户会在关闭项目后自行重命名），会话路径以现有文件夹名为准
+- train-ticketing 迭代流程：用户手动把 feat/* 分支合并进 master 后从 master 迁新分支；feat/project-standardize 为重启后第一批标准化变更（重命名/JDK21/DDL/AGENTS/文档），推送由用户确认后执行
