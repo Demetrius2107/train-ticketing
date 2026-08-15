@@ -33,6 +33,14 @@ public interface StationMapper {
   Station selectByName(@Param("name") String name);
 
   /**
+   * 按主键查询车站（车次保存时校验引用用）
+   *
+   * @param id 车站ID
+   * @return 车站，不存在返回 null
+   */
+  Station selectById(@Param("id") Long id);
+
+  /**
    * 按关键字模糊查询车站列表（名称/拼音全拼/拼音简拼/城市）
    *
    * @param keyword 查询关键字，为空返回全部
