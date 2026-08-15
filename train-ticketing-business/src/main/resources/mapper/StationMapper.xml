@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.business.mapper.StationMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.business.domain.Station">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="name" jdbcType="VARCHAR" property="name" />
+    <result column="name_pinyin" jdbcType="VARCHAR" property="namePinyin" />
+    <result column="name_py" jdbcType="VARCHAR" property="namePy" />
+    <result column="city" jdbcType="VARCHAR" property="city" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, name, name_pinyin, name_py, city, create_time, update_time
+  </sql>
+  <insert id="insert" parameterType="com.trainticketing.business.domain.Station">
+    insert into station (id, name, name_pinyin, name_py, city, create_time, update_time)
+    values (#{id,jdbcType=BIGINT}, #{name,jdbcType=VARCHAR}, #{namePinyin,jdbcType=VARCHAR},
+    #{namePy,jdbcType=VARCHAR}, #{city,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP},
+    #{updateTime,jdbcType=TIMESTAMP})
+  </insert>
+  <select id="selectByName" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from station
+    where name = #{name,jdbcType=VARCHAR}
+    limit 1
+  </select>
+  <select id="selectList" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from station
+    <where>
+      <if test="keyword != null and keyword != ''">
+        and (name like concat('%', #{keyword,jdbcType=VARCHAR}, '%')
+        or name_pinyin like concat('%', #{keyword,jdbcType=VARCHAR}, '%')
+        or name_py like concat('%', #{keyword,jdbcType=VARCHAR}, '%')
+        or city like concat('%', #{keyword,jdbcType=VARCHAR}, '%'))
+      </if>
+    </where>
+    order by name
+  </select>
+  <delete id="deleteById">
+    delete from station where id = #{id,jdbcType=BIGINT}
+  </delete>
+</mapper>
