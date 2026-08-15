@@ -33,6 +33,13 @@
     where train_id = #{trainId,jdbcType=BIGINT} and carriage_index = #{carriageIndex,jdbcType=INTEGER}
     limit 1
   </select>
+  <select id="selectById" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_carriage
+    where id = #{id,jdbcType=BIGINT}
+    limit 1
+  </select>
   <delete id="deleteById">
     delete from train_carriage where id = #{id,jdbcType=BIGINT}
   </delete>

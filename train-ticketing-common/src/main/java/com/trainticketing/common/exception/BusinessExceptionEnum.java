@@ -13,7 +13,11 @@ public enum BusinessExceptionEnum {
   BUSINESS_TRAIN_CARRIAGE_INDEX_UNIQUE_ERROR("同车次厢号已存在"),
   BUSINESS_STATION_NOT_EXIST("车站不存在"),
   BUSINESS_TRAIN_NOT_EXIST("车次不存在"),
-  BUSINESS_START_END_STATION_SAME("始发站与终到站不能相同");
+  BUSINESS_START_END_STATION_SAME("始发站与终到站不能相同"),
+  BUSINESS_CARRIAGE_NOT_EXIST("车厢不存在"),
+  BUSINESS_SEAT_ALREADY_GENERATED("该车厢已生成座位，请勿重复生成"),
+  BUSINESS_SLEEPER_SEAT_NOT_SUPPORTED("卧铺座位生成暂未支持"),
+  BUSINESS_TRAIN_PRICE_EXIST("该车次该座位类型票价已存在");
 
   //描述
   private String desc;

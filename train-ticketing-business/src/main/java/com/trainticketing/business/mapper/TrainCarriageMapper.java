@@ -42,6 +42,14 @@ public interface TrainCarriageMapper {
   TrainCarriage selectByIndex(@Param("trainId") Long trainId, @Param("carriageIndex") Integer carriageIndex);
 
   /**
+   * 按主键查询车厢（座位生成时校验引用用）
+   *
+   * @param id 车厢ID
+   * @return 车厢，不存在返回 null
+   */
+  TrainCarriage selectById(@Param("id") Long id);
+
+  /**
    * 按主键删除车厢
    *
    * @param id 车厢ID
