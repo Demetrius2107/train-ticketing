@@ -190,7 +190,7 @@ public class OrderService {
         }
         TrainOrderItem first = items.get(0);
         ticketCacheService.incrRemaining(order.getDailyTrainId(), first.getSeatType(),
-            first.getDepartIndex(), first.getArriveIndex(), items.size());
+                                               first.getDepartIndex(), first.getArriveIndex(), items.size());
     }
 
     /**

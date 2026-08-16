@@ -75,4 +75,18 @@ public class OrderController {
         orderService.cancel(orderNo);
         return new CommonResp<>();
     }
+
+    /**
+     * 订单支付（仅待支付且未过期订单；成功后状态置已支付并记录支付时间）
+     *
+     * @param orderNo  订单号
+     * @param memberId 支付会员id
+     * @return 成功
+     */
+    @PostMapping("/pay")
+    public CommonResp<Void> pay(@RequestParam String orderNo,
+                                @RequestParam(required = false) Long memberId) {
+        orderService.pay(orderNo, memberId);
+        return new CommonResp<>();
+    }
 }
