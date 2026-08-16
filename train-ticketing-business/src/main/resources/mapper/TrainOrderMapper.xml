@@ -60,4 +60,12 @@
     </set>
     where id = #{id,jdbcType=BIGINT}
   </update>
+  <select id="selectExpiredPending" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_order
+    where status = '0'
+      and expire_time &lt;= #{now,jdbcType=TIMESTAMP}
+    limit 100
+  </select>
 </mapper>
