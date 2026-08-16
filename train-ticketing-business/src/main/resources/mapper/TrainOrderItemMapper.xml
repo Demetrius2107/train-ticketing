@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.business.mapper.TrainOrderItemMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.business.domain.TrainOrderItem">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="order_id" jdbcType="BIGINT" property="orderId" />
+    <result column="passenger_id" jdbcType="BIGINT" property="passengerId" />
+    <result column="passenger_name" jdbcType="VARCHAR" property="passengerName" />
+    <result column="id_card" jdbcType="VARCHAR" property="idCard" />
+    <result column="daily_train_seat_id" jdbcType="BIGINT" property="dailyTrainSeatId" />
+    <result column="seat_type" jdbcType="CHAR" property="seatType" />
+    <result column="price" jdbcType="DECIMAL" property="price" />
+    <result column="depart_index" jdbcType="INTEGER" property="departIndex" />
+    <result column="arrive_index" jdbcType="INTEGER" property="arriveIndex" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, order_id, passenger_id, passenger_name, id_card, daily_train_seat_id, seat_type,
+    price, depart_index, arrive_index, create_time, update_time
+  </sql>
+  <insert id="insert" parameterType="com.trainticketing.business.domain.TrainOrderItem">
+    insert into train_order_item (id, order_id, passenger_id, passenger_name, id_card,
+      daily_train_seat_id, seat_type, price, depart_index, arrive_index, create_time, update_time)
+    values (#{id,jdbcType=BIGINT}, #{orderId,jdbcType=BIGINT}, #{passengerId,jdbcType=BIGINT},
+      #{passengerName,jdbcType=VARCHAR}, #{idCard,jdbcType=VARCHAR},
+      #{dailyTrainSeatId,jdbcType=BIGINT}, #{seatType,jdbcType=CHAR}, #{price,jdbcType=DECIMAL},
+      #{departIndex,jdbcType=INTEGER}, #{arriveIndex,jdbcType=INTEGER},
+      #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP})
+  </insert>
+  <select id="selectByOrderId" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_order_item
+    where order_id = #{orderId,jdbcType=BIGINT}
+    order by id asc
+  </select>
+  <delete id="deleteByOrderId">
+    delete from train_order_item
+    where order_id = #{orderId,jdbcType=BIGINT}
+  </delete>
+</mapper>

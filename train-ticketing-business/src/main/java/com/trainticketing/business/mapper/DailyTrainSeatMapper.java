@@ -55,4 +55,21 @@ public interface DailyTrainSeatMapper {
   List<SeatRemainingResp> selectRemainingByInterval(@Param("dailyTrainId") Long dailyTrainId,
                                                     @Param("departIndex") Integer departIndex,
                                                     @Param("arriveIndex") Integer arriveIndex);
+
+  /**
+   * 按区间+座位类型查询可售座位明细（下单分配用）：
+   * 返回该排班内指定座位类型、sale_status='0' 且未被"区间重叠的已支付订单"占用的座位。
+   *
+   * @param dailyTrainId 排班ID
+   * @param departIndex  区间起点站序
+   * @param arriveIndex  区间终点站序
+   * @param seatType     座位类型编码
+   * @param limit        最多返回条数
+   * @return 可售座位列表
+   */
+  List<DailyTrainSeat> selectAvailableByInterval(@Param("dailyTrainId") Long dailyTrainId,
+                                                 @Param("departIndex") Integer departIndex,
+                                                 @Param("arriveIndex") Integer arriveIndex,
+                                                 @Param("seatType") String seatType,
+                                                 @Param("limit") Integer limit);
 }

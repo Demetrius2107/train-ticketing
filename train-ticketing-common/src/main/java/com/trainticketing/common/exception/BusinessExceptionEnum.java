@@ -23,7 +23,11 @@ public enum BusinessExceptionEnum {
   BUSINESS_DAILY_TRAIN_NOT_EXIST("排班不存在"),
   BUSINESS_DAILY_SEAT_ALREADY_GENERATED("该排班已生成当日座位，请勿重复生成"),
   BUSINESS_STATION_INDEX_INVALID("出发站与到达站站序不合法"),
-  BUSINESS_SEAT_NOT_GENERATED("车次尚未生成座位档案，请先生成座位");
+  BUSINESS_SEAT_NOT_GENERATED("车次尚未生成座位档案，请先生成座位"),
+  BUSINESS_SEAT_NOT_ENOUGH("该区间余票不足"),
+  BUSINESS_TRAIN_PRICE_NOT_EXIST("该车次该座位类型票价未配置"),
+  BUSINESS_ORDER_NOT_EXIST("订单不存在"),
+  BUSINESS_ORDER_STATUS_INVALID("订单状态不允许该操作");
 
   //描述
   private String desc;
