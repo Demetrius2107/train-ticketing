@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trainticketing.member.mapper.PassengerMapper">
+  <resultMap id="BaseResultMap" type="com.trainticketing.member.domain.Passenger">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="member_id" jdbcType="BIGINT" property="memberId" />
+    <result column="name" jdbcType="VARCHAR" property="name" />
+    <result column="id_card" jdbcType="VARCHAR" property="idCard" />
+    <result column="type" jdbcType="CHAR" property="type" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, member_id, name, id_card, type, create_time, update_time
+  </sql>
+  <insert id="insert" parameterType="com.trainticketing.member.domain.Passenger">
+    insert into passenger (id, member_id, name, id_card, type, create_time, update_time)
+    values (#{id,jdbcType=BIGINT}, #{memberId,jdbcType=BIGINT}, #{name,jdbcType=VARCHAR},
+      #{idCard,jdbcType=VARCHAR}, #{type,jdbcType=CHAR},
+      #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP})
+  </insert>
+  <select id="selectById" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from passenger
+    where id = #{id,jdbcType=BIGINT}
+  </select>
+  <select id="selectByMemberId" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from passenger
+    where member_id = #{memberId,jdbcType=BIGINT}
+    order by create_time asc
+  </select>
+  <delete id="deleteById">
+    delete from passenger
+    where id = #{id,jdbcType=BIGINT}
+  </delete>
+</mapper>
