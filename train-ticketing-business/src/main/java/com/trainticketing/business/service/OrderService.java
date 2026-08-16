@@ -17,6 +17,7 @@ import com.trainticketing.business.mapper.TrainOrderMapper;
 import com.trainticketing.business.mapper.TrainPriceMapper;
 import com.trainticketing.business.mapper.TrainStationMapper;
 import com.trainticketing.business.req.OrderSaveReq;
+import com.trainticketing.business.resp.OrderQueryResp;
 import com.trainticketing.common.exception.BusinessException;
 import com.trainticketing.common.exception.BusinessExceptionEnum;
 import jakarta.annotation.Resource;
@@ -138,6 +139,30 @@ public class OrderService {
     }
 
     /**
+     * 取消订单：仅待支付订单可取消；删除明细（释放区间占用）并置状态为已取消（事务）。
+     *
+     * @param orderNo 订单号
+     */
+    @Transactional
+    public void cancel(String orderNo) {
+        TrainOrder order = trainOrderMapper.selectByOrderNo(orderNo);
+        if (ObjectUtil.isNull(order)) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_NOT_EXIST);
+        }
+        if (!OrderStatusEnum.PENDING.getCode().equals(order.getStatus())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
+        }
+        // 删除明细：释放座位区间占用（余票恢复）
+        trainOrderItemMapper.deleteByOrderId(order.getId());
+        // 置订单为已取消
+        TrainOrder update = new TrainOrder();
+        update.setId(order.getId());
+        update.setStatus(OrderStatusEnum.CANCELLED.getCode());
+        trainOrderMapper.updateById(update);
+        LOG.info("取消订单成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
+    }
+
+    /**
      * 生成订单号：日期(8位) + 雪花ID后10位
      *
      * @param now 当前时间戳
@@ -147,5 +172,72 @@ public class OrderService {
         String date = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date(now));
         String snow = String.valueOf(IdUtil.getSnowflakeNextId());
         return date + snow.substring(Math.max(0, snow.length() - 10));
+    }
+
+    /**
+     * 查询会员订单列表（含明细，按下单时间倒序）
+     *
+     * @param memberId 会员ID
+     * @return 订单列表
+     */
+    public List<OrderQueryResp> queryByMemberId(Long memberId) {
+        List<TrainOrder> orders = trainOrderMapper.selectByMemberId(memberId);
+        List<OrderQueryResp> respList = new ArrayList<>();
+        if (CollUtil.isNotEmpty(orders)) {
+            for (TrainOrder order : orders) {
+                respList.add(buildQueryResp(order));
+            }
+        }
+        return respList;
+    }
+
+    /**
+     * 查询订单详情（含明细）
+     *
+     * @param orderNo 订单号
+     * @return 订单详情
+     */
+    public OrderQueryResp queryByOrderNo(String orderNo) {
+        TrainOrder order = trainOrderMapper.selectByOrderNo(orderNo);
+        if (ObjectUtil.isNull(order)) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_NOT_EXIST);
+        }
+        return buildQueryResp(order);
+    }
+
+    /**
+     * 组装订单查询响应（订单头 + 明细）
+     *
+     * @param order 订单实体
+     * @return 订单查询响应
+     */
+    private OrderQueryResp buildQueryResp(TrainOrder order) {
+        OrderQueryResp resp = new OrderQueryResp();
+        resp.setId(order.getId());
+        resp.setOrderNo(order.getOrderNo());
+        resp.setMemberId(order.getMemberId());
+        resp.setTrainId(order.getTrainId());
+        resp.setDepartStationId(order.getDepartStationId());
+        resp.setArriveStationId(order.getArriveStationId());
+        resp.setRunDate(order.getRunDate());
+        resp.setStatus(order.getStatus());
+        resp.setTotalAmount(order.getTotalAmount());
+        resp.setCreateTime(order.getCreateTime());
+        List<TrainOrderItem> items = trainOrderItemMapper.selectByOrderId(order.getId());
+        if (CollUtil.isNotEmpty(items)) {
+            List<OrderQueryResp.OrderItemResp> itemResps = new ArrayList<>();
+            for (TrainOrderItem item : items) {
+                OrderQueryResp.OrderItemResp itemResp = new OrderQueryResp.OrderItemResp();
+                itemResp.setPassengerName(item.getPassengerName());
+                itemResp.setIdCard(item.getIdCard());
+                itemResp.setSeatType(item.getSeatType());
+                itemResp.setPrice(item.getPrice());
+                itemResp.setDepartIndex(item.getDepartIndex());
+                itemResp.setArriveIndex(item.getArriveIndex());
+                itemResps.add(itemResp);
+            }
+            resp.setItems(itemResps);
+        }
+        return resp;
     }
 }
