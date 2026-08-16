@@ -55,4 +55,12 @@ public interface TrainOrderMapper {
    * @return 影响行数
    */
   int updateById(TrainOrder record);
+
+  /**
+   * 查询已超过支付过期时间且仍为待支付的订单（延时关单扫描用）
+   *
+   * @param now 当前时间
+   * @return 超时待支付订单列表
+   */
+  List<TrainOrder> selectExpiredPending(@Param("now") java.util.Date now);
 }

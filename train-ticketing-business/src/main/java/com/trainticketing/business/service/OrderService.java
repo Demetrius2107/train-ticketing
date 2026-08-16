@@ -194,6 +194,68 @@ public class OrderService {
     }
 
     /**
+     * 订单支付：仅待支付订单可支付，且未超过支付过期时间；
+     * 支付成功后状态置为已支付并记录支付时间（事务）。
+     *
+     * @param orderNo 订单号
+     * @param memberId 支付会员ID
+     */
+    @Transactional
+    public void pay(String orderNo, Long memberId) {
+        TrainOrder order = trainOrderMapper.selectByOrderNo(orderNo);
+        if (ObjectUtil.isNull(order)) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_NOT_EXIST);
+        }
+        // 仅限订单归属会员支付
+        if (ObjectUtil.isNotNull(memberId) && !order.getMemberId().equals(memberId)) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
+        }
+        if (!OrderStatusEnum.PENDING.getCode().equals(order.getStatus())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
+        }
+        // 支付过期校验：超过 expire_time 视为超时不可支付
+        if (ObjectUtil.isNotNull(order.getExpireTime())
+            && order.getExpireTime().before(new Date())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_PAY_EXPIRED);
+        }
+        // 置订单为已支付并记录支付时间
+        TrainOrder update = new TrainOrder();
+        update.setId(order.getId());
+        update.setStatus(OrderStatusEnum.PAID.getCode());
+        update.setPayTime(new Date());
+        trainOrderMapper.updateById(update);
+        LOG.info("订单支付成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
+    }
+
+    /**
+     * 超时关单（定时任务/手动触发）：将已超过支付过期时间的待支付订单批量置为已取消，
+     * 并删除明细释放区间占用（余票恢复）。
+     *
+     * @return 本次关单的订单数
+     */
+    @Transactional
+    public int expirePendingOrders() {
+        List<TrainOrder> expiredOrders = trainOrderMapper.selectExpiredPending(new Date());
+        if (CollUtil.isEmpty(expiredOrders)) {
+            return 0;
+        }
+        int count = 0;
+        for (TrainOrder order : expiredOrders) {
+            // 回补 Redis 区间余票（与下单预扣闭环）
+            releaseRemaining(order);
+            // 删除明细：释放座位区间占用
+            trainOrderItemMapper.deleteByOrderId(order.getId());
+            TrainOrder update = new TrainOrder();
+            update.setId(order.getId());
+            update.setStatus(OrderStatusEnum.CANCELLED.getCode());
+            trainOrderMapper.updateById(update);
+            count++;
+            LOG.info("超时关单 orderNo={}, memberId={}", order.getOrderNo(), order.getMemberId());
+        }
+        return count;
+    }
+
+    /**
      * 生成订单号：日期(8位) + 雪花ID后10位
      *
      * @param now 当前时间戳
