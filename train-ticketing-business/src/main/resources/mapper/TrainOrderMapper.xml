@@ -70,4 +70,14 @@
       and expire_time &lt;= #{now,jdbcType=TIMESTAMP}
     limit 100
   </select>
+  <!-- CAS 式状态转换：仅当当前状态=expectStatus 才更新，防并发竞态 -->
+  <update id="updateStatusIfMatch">
+    update train_order
+    set status = #{newStatus,jdbcType=CHAR},
+      <if test="payTime != null">pay_time = #{payTime,jdbcType=TIMESTAMP},</if>
+      <if test="refundTime != null">refund_time = #{refundTime,jdbcType=TIMESTAMP},</if>
+      update_time = now(3)
+    where id = #{id,jdbcType=BIGINT}
+      and status = #{expectStatus,jdbcType=CHAR}
+  </update>
 </mapper>

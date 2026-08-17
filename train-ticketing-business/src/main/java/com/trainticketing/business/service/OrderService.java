@@ -217,13 +217,15 @@ public class OrderService {
         if (!OrderStatusEnum.PENDING.getCode().equals(order.getStatus())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
         }
-        // 删除明细：释放座位区间占用（余票恢复）
+        // CAS 状态转换：PENDING→CANCELLED，先判状态再删明细，防并发支付竞态。
+        // 若已被支付（CAS 失败），不删明细直接报错，避免已支付订单丢明细。
+        int updated = trainOrderMapper.updateStatusIfMatch(order.getId(),
+            OrderStatusEnum.PENDING.getCode(), OrderStatusEnum.CANCELLED.getCode(), null, null);
+        if (updated == 0) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_CONCURRENT_CONFLICT);
+        }
+        // CAS 成功后删除明细：释放座位区间占用（余票恢复）
         trainOrderItemMapper.deleteByOrderId(order.getId());
-        // 置订单为已取消
-        TrainOrder update = new TrainOrder();
-        update.setId(order.getId());
-        update.setStatus(OrderStatusEnum.CANCELLED.getCode());
-        trainOrderMapper.updateById(update);
         // 缓存-DB 一致性：回补 Redis 余票放至事务提交后，避免回滚导致缓存虚高超卖
         releaseRemainingAfterCommit(order);
         LOG.info("取消订单成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
@@ -311,12 +313,12 @@ public class OrderService {
             && order.getExpireTime().before(new Date())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_PAY_EXPIRED);
         }
-        // 置订单为已支付并记录支付时间
-        TrainOrder update = new TrainOrder();
-        update.setId(order.getId());
-        update.setStatus(OrderStatusEnum.PAID.getCode());
-        update.setPayTime(new Date());
-        trainOrderMapper.updateById(update);
+        // CAS 状态转换：PENDING→PAID，防并发关单竞态（影响行数0说明已被关单）
+        int updated = trainOrderMapper.updateStatusIfMatch(order.getId(),
+            OrderStatusEnum.PENDING.getCode(), OrderStatusEnum.PAID.getCode(), new Date(), null);
+        if (updated == 0) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_CONCURRENT_CONFLICT);
+        }
         LOG.info("订单支付成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
     }
 
@@ -341,14 +343,15 @@ public class OrderService {
         if (!OrderStatusEnum.PAID.getCode().equals(order.getStatus())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
         }
-        // 删除明细：释放座位区间占用（余票恢复）
+        // CAS 状态转换：PAID→REFUNDED，先判状态再删明细，防重复退票竞态。
+        // 若状态已变（CAS 失败），不删明细直接报错，避免丢明细。
+        int updated = trainOrderMapper.updateStatusIfMatch(order.getId(),
+            OrderStatusEnum.PAID.getCode(), OrderStatusEnum.REFUNDED.getCode(), null, new Date());
+        if (updated == 0) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_CONCURRENT_CONFLICT);
+        }
+        // CAS 成功后删除明细：释放座位区间占用（余票恢复）
         trainOrderItemMapper.deleteByOrderId(order.getId());
-        // 置订单为已退票并记录退款时间
-        TrainOrder update = new TrainOrder();
-        update.setId(order.getId());
-        update.setStatus(OrderStatusEnum.REFUNDED.getCode());
-        update.setRefundTime(new Date());
-        trainOrderMapper.updateById(update);
         // 缓存-DB 一致性：回补 Redis 余票放至事务提交后（与取消一致）
         releaseRemainingAfterCommit(order);
         LOG.info("退票成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
@@ -368,12 +371,16 @@ public class OrderService {
         }
         int count = 0;
         for (TrainOrder order : expiredOrders) {
-            // 删除明细：释放座位区间占用
+            // CAS 状态转换：PENDING→CANCELLED，先判状态再删明细。
+            // 若用户刚支付成功（CAS 失败），跳过该订单，不删明细不回补。
+            int updated = trainOrderMapper.updateStatusIfMatch(order.getId(),
+                OrderStatusEnum.PENDING.getCode(), OrderStatusEnum.CANCELLED.getCode(), null, null);
+            if (updated == 0) {
+                LOG.info("超时关单跳过（订单状态已变更） orderNo={}", order.getOrderNo());
+                continue;
+            }
+            // CAS 成功后再删除明细：释放座位区间占用
             trainOrderItemMapper.deleteByOrderId(order.getId());
-            TrainOrder update = new TrainOrder();
-            update.setId(order.getId());
-            update.setStatus(OrderStatusEnum.CANCELLED.getCode());
-            trainOrderMapper.updateById(update);
             // 缓存-DB 一致性：回补 Redis 余票放至事务提交后
             releaseRemainingAfterCommit(order);
             count++;
