@@ -8,6 +8,7 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.RandomUtil;
 import com.trainticketing.common.exception.BusinessException;
 import com.trainticketing.common.exception.BusinessExceptionEnum;
+import com.trainticketing.common.util.JwtUtil;
 import com.trainticketing.member.domain.Member;
 import com.trainticketing.member.domain.MemberExample;
 import com.trainticketing.member.domain.SmsCode;
@@ -35,6 +36,9 @@ public class MemberService {
 
   @Resource
   private SmsCodeMapper smsCodeMapper;
+
+  @Resource
+  private JwtUtil jwtUtil;
 
   public int count() {
     return Math.toIntExact(memberMapper.countByExample(null));
@@ -102,7 +106,10 @@ public class MemberService {
     }
     //验证码校验通过，标记已使用
     smsCodeMapper.markUsed(smsCode.getId(), new Date());
-    return BeanUtil.copyProperties(memberDB,MemberLoginResp.class);
+    MemberLoginResp resp = BeanUtil.copyProperties(memberDB, MemberLoginResp.class);
+    // 签发 JWT，前端后续请求带 Authorization: Bearer {token}
+    resp.setToken(jwtUtil.generate(memberDB.getId(), memberDB.getMobile()));
+    return resp;
 
   }
 

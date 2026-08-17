@@ -31,7 +31,8 @@ public enum BusinessExceptionEnum {
   BUSINESS_ORDER_NOT_EXIST("订单不存在"),
   BUSINESS_ORDER_STATUS_INVALID("订单状态不允许该操作"),
   BUSINESS_ORDER_PAY_EXPIRED("订单已超过支付时间，请重新下单"),
-  BUSINESS_ORDER_LOCK_BUSY("当前下单人数过多，请稍后重试");
+  BUSINESS_ORDER_LOCK_BUSY("当前下单人数过多，请稍后重试"),
+  BUSINESS_MEMBER_NOT_LOGIN("未登录或登录已过期，请重新登录");
 
   //描述
   private String desc;

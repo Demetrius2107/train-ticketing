@@ -59,6 +59,22 @@
       <artifactId>spring-boot-starter-validation</artifactId>
     </dependency>
 
+    <!-- JWT 签发/校验（member 签发、gateway 校验共用） -->
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-impl</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-jackson</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
   </dependencies>
 
 </project>

@@ -5,6 +5,9 @@ public class MemberLoginResp {
 
   private String mobile;
 
+  /** 登录签发的 JWT，前端后续请求放 Authorization: Bearer {token} */
+  private String token;
+
   public Long getId() {
     return id;
   }
@@ -19,6 +22,14 @@ public class MemberLoginResp {
 
   public void setMobile(String mobile) {
     this.mobile = mobile;
+  }
+
+  public String getToken() {
+    return token;
+  }
+
+  public void setToken(String token) {
+    this.token = token;
   }
 
   @Override
