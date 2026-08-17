@@ -101,8 +101,9 @@ public class DailyTrainSeatService {
     }
 
     /**
-     * 初始化排班余票缓存：座位生成后，每个座位类型在所有区间组合（出发站序 < 到达站序）
-     * 的初始余票 = 该座位类型座位总数（生成后无订单占用）。
+     * 初始化排班余票缓存（相邻子段模型）：座位生成后无订单占用，
+     * 每个座位类型在每段相邻站序（i → i+1）的初始余票 = 该座位类型座位总数。
+     * 相邻段是 Redis 缓存的最小粒度，一张跨多段的票会扣减路径上所有相邻段。
      *
      * @param dailyTrainId 排班ID
      * @param trainId      车次ID
@@ -120,16 +121,19 @@ public class DailyTrainSeatService {
             LOG.warn("排班 {} 无经停站，跳过余票缓存初始化", dailyTrainId);
             return;
         }
-        // 对各座位类型、各区间组合初始化余票
+        // 经停站按站序升序，相邻段 = stationIndex(i) → stationIndex(i+1)
+        List<Integer> indexes = new ArrayList<>(stationList.size());
+        for (TrainStation ts : stationList) {
+            indexes.add(ts.getStationIndex());
+        }
+        // 对各座位类型、各相邻段初始化余票
         for (Map.Entry<String, Integer> entry : seatTypeCount.entrySet()) {
-            for (int i = 0; i < stationList.size(); i++) {
-                for (int j = i + 1; j < stationList.size(); j++) {
-                    ticketCacheService.initRemaining(dailyTrainId, entry.getKey(),
-                        stationList.get(i).getStationIndex(), stationList.get(j).getStationIndex(),
-                        entry.getValue());
-                }
+            for (int i = 0; i < indexes.size() - 1; i++) {
+                ticketCacheService.initRemaining(dailyTrainId, entry.getKey(),
+                    indexes.get(i), entry.getValue());
             }
         }
-        LOG.info("排班 {} 余票缓存初始化完成，座位类型数={}", dailyTrainId, seatTypeCount.size());
+        LOG.info("排班 {} 余票缓存初始化完成，座位类型数={}，相邻段数={}",
+            dailyTrainId, seatTypeCount.size(), Math.max(0, indexes.size() - 1));
     }
 }

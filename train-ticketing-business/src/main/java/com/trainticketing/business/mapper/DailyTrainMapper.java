@@ -79,4 +79,11 @@ public interface DailyTrainMapper {
    * @return 影响行数
    */
   int deleteById(@Param("id") Long id);
+
+  /**
+   * 查询所有运行中的排班（对账任务用，仅取 id/train_id，字段轻量）。
+   *
+   * @return 运行中排班列表
+   */
+  List<DailyTrain> selectRunningForReconcile();
 }
