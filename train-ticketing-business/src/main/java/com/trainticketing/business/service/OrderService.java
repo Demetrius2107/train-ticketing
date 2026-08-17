@@ -3,6 +3,7 @@ package com.trainticketing.business.service;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.ObjectUtil;
+import com.trainticketing.business.config.TicketLockConfig;
 import com.trainticketing.business.domain.DailyTrain;
 import com.trainticketing.business.domain.DailyTrainSeat;
 import com.trainticketing.business.domain.TrainOrder;
@@ -26,8 +27,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -69,16 +73,28 @@ public class OrderService {
     @Resource
     private TicketCacheService ticketCacheService;
 
+    @Resource
+    private RedissonClient redissonClient;
+
+    /** 自身代理引用：下单需先加分布式锁（非事务）再进入事务方法，避免同类自调用导致 @Transactional 失效 */
+    @Lazy
+    @Resource
+    private OrderService self;
+
     /**
-     * 下单：为每个乘车人分配一个区间可售座位，生成订单 + 订单明细（事务）。
-     * 余票校验基于区间占用模型：可售座位 = sale_status='0' 且未被区间重叠的已支付订单占用。
-     * 高并发防超卖：先 Redis Lua 原子预扣区间余票，失败即返回余票不足；订单取消/超时再回补。
+     * 下单入口：为每个乘车人分配一个区间可售座位，生成订单 + 订单明细。
+     * <p>高并发防超卖三道防线：
+     * 1. Redisson 分布式锁（粒度 dailyTrainId:seatType）串行化同座位类型下单；
+     * 2. Redis Lua 原子预扣区间余票（相邻子段模型）；
+     * 3. DB 选座 FOR UPDATE 行锁兜底。
+     * <p>锁在事务外层（持锁→进事务→提交/回滚→释放），避免锁释放早于事务提交导致并发穿透。
+     * 事务体在 {@link #saveInTx}，通过 self 代理调用以保证 @Transactional 生效。
      *
      * @param req 下单请求
      * @return 订单号
      */
-    @Transactional
     public String save(OrderSaveReq req) {
+        // 只读校验放锁外，快速失败
         DailyTrain dailyTrain = dailyTrainMapper.selectById(req.getDailyTrainId());
         if (ObjectUtil.isNull(dailyTrain)) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_DAILY_TRAIN_NOT_EXIST);
@@ -89,6 +105,39 @@ public class OrderService {
             || depart.getStationIndex() >= arrive.getStationIndex()) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
         }
+        // 分布式锁：同排班同座位类型串行化，不同座位类型可并行
+        String lockKey = TicketLockConfig.lockKey(req.getDailyTrainId(), req.getSeatType());
+        RLock lock = redissonClient.getLock(lockKey);
+        boolean locked = false;
+        try {
+            locked = lock.tryLock(TicketLockConfig.LOCK_WAIT_SECONDS, TicketLockConfig.LOCK_LEASE_SECONDS,
+                java.util.concurrent.TimeUnit.SECONDS);
+            if (!locked) {
+                throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
+            }
+            return self.saveInTx(req, dailyTrain, depart, arrive);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
+        } finally {
+            if (locked && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 下单事务体：Redis 预扣 + DB 选座（行锁兜底）+ 生成订单/明细。
+     * 由 {@link #save} 持分布式锁后通过 self 代理调用，保证 @Transactional 代理生效。
+     *
+     * @param req         下单请求
+     * @param dailyTrain  排班（锁外已查）
+     * @param depart      出发经停站
+     * @param arrive      到达经停站
+     * @return 订单号
+     */
+    @Transactional
+    public String saveInTx(OrderSaveReq req, DailyTrain dailyTrain, TrainStation depart, TrainStation arrive) {
         int need = req.getPassengers().size();
         // 1. Redis Lua 原子预扣区间余票（按乘车人数），防并发超卖
         long remainAfter = ticketCacheService.decrRemaining(
@@ -100,8 +149,8 @@ public class OrderService {
         // 避免缓存凭空减少。提交成功则保留扣减。
         registerRollbackCompensate(req.getDailyTrainId(), req.getSeatType(),
             depart.getStationIndex(), arrive.getStationIndex(), need);
-        // 2. DB 兜底校验可售座位（缓存与 DB 一致性防线）；不足抛异常 → 事务回滚 → 上方回调回补
-        List<DailyTrainSeat> availableSeats = dailyTrainSeatMapper.selectAvailableByInterval(
+        // 2. DB 兜底校验可售座位（FOR UPDATE 行锁，与缓存一致性防线）；不足抛异常 → 事务回滚 → 回调回补
+        List<DailyTrainSeat> availableSeats = dailyTrainSeatMapper.selectAvailableForUpdate(
             req.getDailyTrainId(), depart.getStationIndex(), arrive.getStationIndex(),
             req.getSeatType(), need);
         if (CollUtil.isEmpty(availableSeats) || availableSeats.size() < need) {

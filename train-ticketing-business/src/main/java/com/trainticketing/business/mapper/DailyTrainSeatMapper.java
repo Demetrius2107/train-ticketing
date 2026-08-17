@@ -72,4 +72,23 @@ public interface DailyTrainSeatMapper {
                                                  @Param("arriveIndex") Integer arriveIndex,
                                                  @Param("seatType") String seatType,
                                                  @Param("limit") Integer limit);
+
+  /**
+   * 按区间+座位类型查询可售座位明细并加行锁（下单分配用，DB 层防超卖兜底）：
+   * 语义同 {@link #selectAvailableByInterval}，末尾追加 FOR UPDATE，
+   * 在事务内对候选座位行加行锁，配合 Redisson 分布式锁杜绝并发选中同一座位。
+   * 必须在事务内调用。
+   *
+   * @param dailyTrainId 排班ID
+   * @param departIndex  区间起点站序
+   * @param arriveIndex  区间终点站序
+   * @param seatType     座位类型编码
+   * @param limit        最多返回条数
+   * @return 可售座位列表（已加锁）
+   */
+  List<DailyTrainSeat> selectAvailableForUpdate(@Param("dailyTrainId") Long dailyTrainId,
+                                                @Param("departIndex") Integer departIndex,
+                                                @Param("arriveIndex") Integer arriveIndex,
+                                                @Param("seatType") String seatType,
+                                                @Param("limit") Integer limit);
 }
