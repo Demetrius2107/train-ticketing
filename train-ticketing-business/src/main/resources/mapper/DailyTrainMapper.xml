@@ -70,4 +70,12 @@
   <delete id="deleteById">
     delete from daily_train where id = #{id,jdbcType=BIGINT}
   </delete>
+  <!-- 对账任务：查所有运行中排班（id/train_id 足够） -->
+  <select id="selectRunningForReconcile" resultMap="BaseResultMap">
+    select id, train_id, run_date, start_station_id, end_station_id,
+    start_time, end_time, status, create_time, update_time
+    from daily_train
+    where status = '1'
+    order by id
+  </select>
 </mapper>

@@ -1,5 +1,6 @@
 package com.trainticketing.business.service;
 
+import cn.hutool.core.collection.CollUtil;
 import com.trainticketing.business.mapper.DailyTrainSeatMapper;
 import com.trainticketing.business.resp.SeatRemainingResp;
 import jakarta.annotation.Resource;
@@ -234,5 +235,40 @@ public class TicketCacheService {
             LOG.error("Lua 回补余票失败 dailyTrainId={}, seatType={}, [{}-{}], error={}",
                 dailyTrainId, seatType, departIndex, arriveIndex, e.getMessage());
         }
+    }
+
+    /**
+     * 对账：以 DB 区间占用模型为准，重建某排班某座位类型的所有相邻段余票缓存。
+     * <p>流程：先删除该 key 旧缓存，再逐个相邻段查 DB selectRemainingByInterval(dailyTrainId, i, i+1)
+     * 得到该相邻段可售座位数（DB 区间重叠 LEFT JOIN 保证正确性），写入缓存。
+     * <p>兜底场景：缓存丢失、漂移、或服务重启后缓存未预热时由定时任务或手动触发修复。
+     *
+     * @param dailyTrainId 排班ID
+     * @param seatType     座位类型
+     * @param segIndexes   相邻段起点站序列表（升序，段为 i→i+1）
+     * @return 重建的相邻段数
+     */
+    public int reconcileRemaining(Long dailyTrainId, String seatType, List<Integer> segIndexes) {
+        if (CollUtil.isEmpty(segIndexes)) {
+            return 0;
+        }
+        String key = remainKey(dailyTrainId, seatType);
+        // 先删旧缓存，避免残留脏字段
+        stringRedisTemplate.delete(key);
+        for (Integer seg : segIndexes) {
+            // 相邻段 [seg, seg+1] 的可售票数 = DB 该区间未被占用的座位数
+            List<SeatRemainingResp> remaining = dailyTrainSeatMapper.selectRemainingByInterval(
+                dailyTrainId, seg, seg + 1);
+            int count = 0;
+            for (SeatRemainingResp resp : remaining) {
+                if (seatType.equals(resp.getSeatType())) {
+                    count = resp.getRemainingCount().intValue();
+                    break;
+                }
+            }
+            stringRedisTemplate.opsForHash().put(key, remainField(seg), String.valueOf(count));
+        }
+        LOG.info("余票缓存对账重建 dailyTrainId={}, seatType={}, 段数={}", dailyTrainId, seatType, segIndexes.size());
+        return segIndexes.size();
     }
 }

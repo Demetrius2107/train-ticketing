@@ -7,6 +7,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.env.Environment;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * <p>Title: BusinessApplication</p>
@@ -21,6 +22,7 @@ import org.springframework.core.env.Environment;
 @SpringBootApplication
 @ComponentScan("com.trainticketing")
 @MapperScan("com.trainticketing.*.mapper")
+@EnableScheduling
 public class BusinessApplication {
 
   private static final Logger LOG = LoggerFactory.getLogger(BusinessApplication.class);
