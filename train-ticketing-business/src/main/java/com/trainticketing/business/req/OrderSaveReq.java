@@ -22,6 +22,10 @@ public class OrderSaveReq {
     @NotNull(message = "[会员id]不能为空")
     private Long memberId;
 
+    /** 幂等键（前端生成，同一批下单请求携带相同值，防重复提交） */
+    @NotBlank(message = "[幂等键]不能为空")
+    private String idempotentKey;
+
     /** 排班id */
     @NotNull(message = "[排班id]不能为空")
     private Long dailyTrainId;
@@ -52,6 +56,14 @@ public class OrderSaveReq {
 
     public void setMemberId(Long memberId) {
         this.memberId = memberId;
+    }
+
+    public String getIdempotentKey() {
+        return idempotentKey;
+    }
+
+    public void setIdempotentKey(String idempotentKey) {
+        this.idempotentKey = idempotentKey;
     }
 
     public Long getDailyTrainId() {
@@ -106,6 +118,7 @@ public class OrderSaveReq {
     public String toString() {
         return "OrderSaveReq{" +
             "memberId=" + memberId +
+            ", idempotentKey='" + idempotentKey + '\'' +
             ", dailyTrainId=" + dailyTrainId +
             ", departStationId=" + departStationId +
             ", arriveStationId=" + arriveStationId +

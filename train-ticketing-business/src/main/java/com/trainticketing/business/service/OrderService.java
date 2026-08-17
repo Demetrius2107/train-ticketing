@@ -94,6 +94,10 @@ public class OrderService {
      * @return 订单号
      */
     public String save(OrderSaveReq req) {
+        // 幂等拦截：前端传 idempotentKey，Redis SETNX 占位 5 分钟，重复提交直接拒绝
+        if (!acquireIdempotent(req.getMemberId(), req.getIdempotentKey())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_IDEMPOTENT_REPEAT);
+        }
         // 只读校验放锁外，快速失败
         DailyTrain dailyTrain = dailyTrainMapper.selectById(req.getDailyTrainId());
         if (ObjectUtil.isNull(dailyTrain)) {
@@ -124,6 +128,24 @@ public class OrderService {
                 lock.unlock();
             }
         }
+    }
+
+    /** 幂等缓存 key 前缀：order:idem:{memberId}:{idempotentKey} */
+    private static final String IDEM_KEY_PREFIX = "order:idem:";
+    /** 幂等占位有效期：5 分钟，覆盖下单+支付窗口 */
+    private static final java.time.Duration IDEM_TTL = java.time.Duration.ofMinutes(5);
+
+    /**
+     * 幂等占位：SETNX 语义，key 存在返回 false（重复提交），否则占位返回 true。
+     * 用 Redisson RBucket.setIfAbsent 实现，与下单链路共用 RedissonClient。
+     *
+     * @param memberId       会员ID
+     * @param idempotentKey  幂等键（前端生成）
+     * @return true 首次提交可继续；false 重复提交
+     */
+    private boolean acquireIdempotent(Long memberId, String idempotentKey) {
+        String key = IDEM_KEY_PREFIX + memberId + ":" + idempotentKey;
+        return redissonClient.getBucket(key).setIfAbsent("1", IDEM_TTL);
     }
 
     /**
