@@ -52,6 +52,9 @@ public class TrainOrder {
     /** 支付时间 */
     private Date payTime;
 
+    /** 退款时间 */
+    private Date refundTime;
+
     /** 下单时间 */
     private Date createTime;
 
@@ -154,6 +157,14 @@ public class TrainOrder {
         this.payTime = payTime;
     }
 
+    public Date getRefundTime() {
+        return refundTime;
+    }
+
+    public void setRefundTime(Date refundTime) {
+        this.refundTime = refundTime;
+    }
+
     public Date getCreateTime() {
         return createTime;
     }
@@ -185,6 +196,7 @@ public class TrainOrder {
             ", totalAmount=" + totalAmount +
             ", expireTime=" + expireTime +
             ", payTime=" + payTime +
+            ", refundTime=" + refundTime +
             ", createTime=" + createTime +
             ", updateTime=" + updateTime +
             '}';

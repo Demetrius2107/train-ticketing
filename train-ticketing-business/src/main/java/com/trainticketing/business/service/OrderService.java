@@ -321,6 +321,40 @@ public class OrderService {
     }
 
     /**
+     * 退票：仅已支付订单可退；删除明细释放区间占用、置状态为已退票并记录退款时间（事务）。
+     * 退票后座位重新可售，Redis 余票在事务提交后回补（与取消一致的释放逻辑）。
+     * <p>与取消的区别：取消针对待支付订单（未付款），退票针对已支付订单（已付款，需走退款）。
+     *
+     * @param orderNo  订单号
+     * @param memberId 操作会员ID（仅订单归属会员可退）
+     */
+    @Transactional
+    public void refund(String orderNo, Long memberId) {
+        TrainOrder order = trainOrderMapper.selectByOrderNo(orderNo);
+        if (ObjectUtil.isNull(order)) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_NOT_EXIST);
+        }
+        // 仅限订单归属会员退票
+        if (ObjectUtil.isNotNull(memberId) && !order.getMemberId().equals(memberId)) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
+        }
+        if (!OrderStatusEnum.PAID.getCode().equals(order.getStatus())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
+        }
+        // 删除明细：释放座位区间占用（余票恢复）
+        trainOrderItemMapper.deleteByOrderId(order.getId());
+        // 置订单为已退票并记录退款时间
+        TrainOrder update = new TrainOrder();
+        update.setId(order.getId());
+        update.setStatus(OrderStatusEnum.REFUNDED.getCode());
+        update.setRefundTime(new Date());
+        trainOrderMapper.updateById(update);
+        // 缓存-DB 一致性：回补 Redis 余票放至事务提交后（与取消一致）
+        releaseRemainingAfterCommit(order);
+        LOG.info("退票成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
+    }
+
+    /**
      * 超时关单（定时任务/手动触发）：将已超过支付过期时间的待支付订单批量置为已取消，
      * 并删除明细释放区间占用（余票恢复）。
      *
@@ -408,6 +442,8 @@ public class OrderService {
         resp.setRunDate(order.getRunDate());
         resp.setStatus(order.getStatus());
         resp.setTotalAmount(order.getTotalAmount());
+        resp.setPayTime(order.getPayTime());
+        resp.setRefundTime(order.getRefundTime());
         resp.setCreateTime(order.getCreateTime());
         List<TrainOrderItem> items = trainOrderItemMapper.selectByOrderId(order.getId());
         if (CollUtil.isNotEmpty(items)) {

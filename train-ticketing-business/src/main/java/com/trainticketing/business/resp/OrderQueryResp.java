@@ -43,6 +43,12 @@ public class OrderQueryResp {
     /** 订单总金额（元） */
     private BigDecimal totalAmount;
 
+    /** 支付时间 */
+    private Date payTime;
+
+    /** 退款时间 */
+    private Date refundTime;
+
     /** 下单时间 */
     private Date createTime;
 
@@ -127,6 +133,22 @@ public class OrderQueryResp {
 
     public void setCreateTime(Date createTime) {
         this.createTime = createTime;
+    }
+
+    public Date getPayTime() {
+        return payTime;
+    }
+
+    public void setPayTime(Date payTime) {
+        this.payTime = payTime;
+    }
+
+    public Date getRefundTime() {
+        return refundTime;
+    }
+
+    public void setRefundTime(Date refundTime) {
+        this.refundTime = refundTime;
     }
 
     public List<OrderItemResp> getItems() {

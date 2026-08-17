@@ -235,6 +235,7 @@ create table `train_order`
     `total_amount`     decimal(10, 2) not null default 0.00 comment '订单总金额（元）',
     `expire_time`      datetime(3)   default null comment '支付过期时间（下单后10分钟）',
     `pay_time`         datetime(3)   default null comment '支付时间',
+    `refund_time`      datetime(3)   default null comment '退款时间',
     `create_time`      datetime(3)   not null default current_timestamp(3) comment '下单时间',
     `update_time`      datetime(3)   not null default current_timestamp(3) on update current_timestamp(3) comment '修改时间',
     primary key (`id`),
