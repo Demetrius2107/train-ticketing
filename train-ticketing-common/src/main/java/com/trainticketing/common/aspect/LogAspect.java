@@ -64,8 +64,8 @@ public class LogAspect {
             }
             arguments[i] = args[i];
         }
-        // 排除字段，敏感字段或太长的字段不显示：身份证、手机号、邮箱、密码等
-        String[] excludeProperties = {};
+        // 排除敏感字段：身份证、手机号、邮箱、密码、验证码等（AGENTS.md 第5条）
+        String[] excludeProperties = {"idCard", "mobile", "email", "password", "code", "token"};
         PropertyPreFilters filters = new PropertyPreFilters();
         PropertyPreFilters.MySimplePropertyPreFilter excludefilter = filters.addFilter();
         excludefilter.addExcludes(excludeProperties);
@@ -76,8 +76,8 @@ public class LogAspect {
     public Object doAround(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
         long startTime = System.currentTimeMillis();
         Object result = proceedingJoinPoint.proceed();
-        // 排除字段，敏感字段或太长的字段不显示：身份证、手机号、邮箱、密码等
-        String[] excludeProperties = {};
+        // 排除敏感字段：身份证、手机号、邮箱、密码、验证码等（AGENTS.md 第5条）
+        String[] excludeProperties = {"idCard", "mobile", "email", "password", "code", "token"};
         PropertyPreFilters filters = new PropertyPreFilters();
         PropertyPreFilters.MySimplePropertyPreFilter excludefilter = filters.addFilter();
         excludefilter.addExcludes(excludeProperties);

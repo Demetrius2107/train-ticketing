@@ -30,6 +30,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * <p>Title: OrderService</p>
@@ -94,14 +96,15 @@ public class OrderService {
         if (remainAfter < 0) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_SEAT_NOT_ENOUGH);
         }
-        // 2. DB 兜底校验可售座位（缓存与 DB 一致性防线）
+        // 缓存-DB 一致性：预扣成功后，若本事务回滚（DB 写入失败/校验异常）则回补已扣缓存，
+        // 避免缓存凭空减少。提交成功则保留扣减。
+        registerRollbackCompensate(req.getDailyTrainId(), req.getSeatType(),
+            depart.getStationIndex(), arrive.getStationIndex(), need);
+        // 2. DB 兜底校验可售座位（缓存与 DB 一致性防线）；不足抛异常 → 事务回滚 → 上方回调回补
         List<DailyTrainSeat> availableSeats = dailyTrainSeatMapper.selectAvailableByInterval(
             req.getDailyTrainId(), depart.getStationIndex(), arrive.getStationIndex(),
             req.getSeatType(), need);
         if (CollUtil.isEmpty(availableSeats) || availableSeats.size() < need) {
-            // 预扣已成功但 DB 不足（异常数据兜底）：回补缓存后拒绝
-            ticketCacheService.incrRemaining(
-                req.getDailyTrainId(), req.getSeatType(), depart.getStationIndex(), arrive.getStationIndex(), need);
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_SEAT_NOT_ENOUGH);
         }
         // 票价（按车次+座位类型，单价）
@@ -165,8 +168,6 @@ public class OrderService {
         if (!OrderStatusEnum.PENDING.getCode().equals(order.getStatus())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
         }
-        // 回补 Redis 区间余票（按订单明细的区间+座位类型+数量）
-        releaseRemaining(order);
         // 删除明细：释放座位区间占用（余票恢复）
         trainOrderItemMapper.deleteByOrderId(order.getId());
         // 置订单为已取消
@@ -174,23 +175,66 @@ public class OrderService {
         update.setId(order.getId());
         update.setStatus(OrderStatusEnum.CANCELLED.getCode());
         trainOrderMapper.updateById(update);
+        // 缓存-DB 一致性：回补 Redis 余票放至事务提交后，避免回滚导致缓存虚高超卖
+        releaseRemainingAfterCommit(order);
         LOG.info("取消订单成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
     }
 
     /**
      * 回补订单占用的 Redis 区间余票：按订单明细的区间（departIndex/arriveIndex）、
-     * 座位类型与明细数量，将余票加回缓存（取消/超时释放占用时调用）。
+     * 座位类型与明细数量，将余票加回缓存。
+     * <p>缓存-DB 一致性：注册为事务提交后回调，确保 DB 释放成功后才回补缓存，
+     * 避免事务回滚时缓存已回补而 DB 未释放导致余票虚高超卖。
      *
      * @param order 订单实体
      */
-    private void releaseRemaining(TrainOrder order) {
+    private void releaseRemainingAfterCommit(TrainOrder order) {
         List<TrainOrderItem> items = trainOrderItemMapper.selectByOrderId(order.getId());
         if (CollUtil.isEmpty(items)) {
             return;
         }
         TrainOrderItem first = items.get(0);
-        ticketCacheService.incrRemaining(order.getDailyTrainId(), first.getSeatType(),
-            first.getDepartIndex(), first.getArriveIndex(), items.size());
+        Long dailyTrainId = order.getDailyTrainId();
+        String seatType = first.getSeatType();
+        Integer departIndex = first.getDepartIndex();
+        Integer arriveIndex = first.getArriveIndex();
+        int count = items.size();
+        // 已在事务内读取明细，删除发生在本事务；afterCommit 时明细已删，故此处提前取好参数
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    ticketCacheService.incrRemaining(dailyTrainId, seatType, departIndex, arriveIndex, count);
+                }
+            });
+        } else {
+            ticketCacheService.incrRemaining(dailyTrainId, seatType, departIndex, arriveIndex, count);
+        }
+    }
+
+    /**
+     * 下单预扣后的回滚补偿：若本事务回滚（DB 写入失败/校验异常），
+     * 回补已扣的 Redis 余票，避免缓存凭空减少。
+     *
+     * @param dailyTrainId 排班ID
+     * @param seatType     座位类型
+     * @param departIndex  出发站序
+     * @param arriveIndex  到达站序
+     * @param need         已预扣数量
+     */
+    private void registerRollbackCompensate(Long dailyTrainId, String seatType,
+                                            Integer departIndex, Integer arriveIndex, int need) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    ticketCacheService.incrRemaining(dailyTrainId, seatType, departIndex, arriveIndex, need);
+                }
+            }
+        });
     }
 
     /**
@@ -241,14 +285,14 @@ public class OrderService {
         }
         int count = 0;
         for (TrainOrder order : expiredOrders) {
-            // 回补 Redis 区间余票（与下单预扣闭环）
-            releaseRemaining(order);
             // 删除明细：释放座位区间占用
             trainOrderItemMapper.deleteByOrderId(order.getId());
             TrainOrder update = new TrainOrder();
             update.setId(order.getId());
             update.setStatus(OrderStatusEnum.CANCELLED.getCode());
             trainOrderMapper.updateById(update);
+            // 缓存-DB 一致性：回补 Redis 余票放至事务提交后
+            releaseRemainingAfterCommit(order);
             count++;
             LOG.info("超时关单 orderNo={}, memberId={}", order.getOrderNo(), order.getMemberId());
         }
