@@ -57,6 +57,24 @@ public interface TrainOrderMapper {
   int updateById(TrainOrder record);
 
   /**
+   * CAS 式状态转换（乐观锁防并发竞态）：仅当订单当前状态等于 expectStatus 时，
+   * 才更新为新状态并可选记录支付/退款时间。返回影响行数，0 表示状态已被并发改动需放弃操作。
+   * <p>解决场景：用户在支付过期边缘点支付，同时关单任务在跑，两者只有一个能成功。
+   *
+   * @param id           订单ID
+   * @param expectStatus 期望的当前状态（条件）
+   * @param newStatus    目标状态
+   * @param payTime      支付时间（可空，仅支付时传）
+   * @param refundTime   退款时间（可空，仅退票时传）
+   * @return 影响行数（1 成功 / 0 状态不匹配）
+   */
+  int updateStatusIfMatch(@Param("id") Long id,
+                          @Param("expectStatus") String expectStatus,
+                          @Param("newStatus") String newStatus,
+                          @Param("payTime") java.util.Date payTime,
+                          @Param("refundTime") java.util.Date refundTime);
+
+  /**
    * 查询已超过支付过期时间且仍为待支付的订单（延时关单扫描用）
    *
    * @param now 当前时间
