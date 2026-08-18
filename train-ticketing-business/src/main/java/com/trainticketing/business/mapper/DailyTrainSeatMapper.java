@@ -91,4 +91,21 @@ public interface DailyTrainSeatMapper {
                                                 @Param("arriveIndex") Integer arriveIndex,
                                                 @Param("seatType") String seatType,
                                                 @Param("limit") Integer limit);
+
+  /**
+   * 查询区间+座位类型的全部可售座位并加行锁（选座策略用，不限数量）：
+   * 语义同 {@link #selectAvailableForUpdate} 但不带 limit，
+   * 供 SeatAllocationStrategy 在内存中按贪心策略挑选相邻座位。
+   * 必须在事务内调用。
+   *
+   * @param dailyTrainId 排班ID
+   * @param departIndex  区间起点站序
+   * @param arriveIndex  区间终点站序
+   * @param seatType     座位类型编码
+   * @return 全部可售座位列表（已加锁）
+   */
+  List<DailyTrainSeat> selectAllAvailableForUpdate(@Param("dailyTrainId") Long dailyTrainId,
+                                                   @Param("departIndex") Integer departIndex,
+                                                   @Param("arriveIndex") Integer arriveIndex,
+                                                   @Param("seatType") String seatType);
 }

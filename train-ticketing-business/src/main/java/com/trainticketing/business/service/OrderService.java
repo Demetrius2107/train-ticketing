@@ -19,6 +19,7 @@ import com.trainticketing.business.mapper.TrainPriceMapper;
 import com.trainticketing.business.mapper.TrainStationMapper;
 import com.trainticketing.business.req.OrderSaveReq;
 import com.trainticketing.business.resp.OrderQueryResp;
+import com.trainticketing.business.service.seat.SeatAllocationStrategy;
 import com.trainticketing.common.exception.BusinessException;
 import com.trainticketing.common.exception.BusinessExceptionEnum;
 import jakarta.annotation.Resource;
@@ -75,6 +76,9 @@ public class OrderService {
 
     @Resource
     private RedissonClient redissonClient;
+
+    @Resource
+    private SeatAllocationStrategy seatAllocationStrategy;
 
     /** 自身代理引用：下单需先加分布式锁（非事务）再进入事务方法，避免同类自调用导致 @Transactional 失效 */
     @Lazy
@@ -171,11 +175,12 @@ public class OrderService {
         // 避免缓存凭空减少。提交成功则保留扣减。
         registerRollbackCompensate(req.getDailyTrainId(), req.getSeatType(),
             depart.getStationIndex(), arrive.getStationIndex(), need);
-        // 2. DB 兜底校验可售座位（FOR UPDATE 行锁，与缓存一致性防线）；不足抛异常 → 事务回滚 → 回调回补
-        List<DailyTrainSeat> availableSeats = dailyTrainSeatMapper.selectAvailableForUpdate(
+        // 2. DB 选座（FOR UPDATE 全量加锁）+ 贪心策略分配相邻座位
+        List<DailyTrainSeat> availableSeats = dailyTrainSeatMapper.selectAllAvailableForUpdate(
             req.getDailyTrainId(), depart.getStationIndex(), arrive.getStationIndex(),
-            req.getSeatType(), need);
-        if (CollUtil.isEmpty(availableSeats) || availableSeats.size() < need) {
+            req.getSeatType());
+        List<DailyTrainSeat> allocated = seatAllocationStrategy.allocate(availableSeats, req.getSeatType(), need);
+        if (CollUtil.isEmpty(allocated) || allocated.size() < need) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_SEAT_NOT_ENOUGH);
         }
         // 票价（按车次+座位类型，单价）
@@ -203,7 +208,7 @@ public class OrderService {
         // 生成订单明细（一个乘车人一张票，记录区间占位）
         List<TrainOrderItem> items = new ArrayList<>(need);
         for (int i = 0; i < need; i++) {
-            DailyTrainSeat seat = availableSeats.get(i);
+            DailyTrainSeat seat = allocated.get(i);
             OrderSaveReq.PassengerReq passenger = req.getPassengers().get(i);
             TrainOrderItem item = new TrainOrderItem();
             item.setId(IdUtil.getSnowflakeNextId());
