@@ -84,4 +84,21 @@
     limit #{limit,jdbcType=INTEGER}
     for update
   </select>
+
+  <!-- 选座策略用：全量可售座位加行锁，不限数量，供内存贪心选座 -->
+  <select id="selectAllAvailableForUpdate" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from daily_train_seat s
+    left join train_order o on o.daily_train_id = s.daily_train_id and o.status = '1'
+    left join train_order_item oi on oi.order_id = o.id and oi.daily_train_seat_id = s.id
+      and oi.depart_index &lt;= #{arriveIndex,jdbcType=INTEGER}
+      and oi.arrive_index &gt;= #{departIndex,jdbcType=INTEGER}
+    where s.daily_train_id = #{dailyTrainId,jdbcType=BIGINT}
+      and s.sale_status = '0'
+      and s.seat_type = #{seatType,jdbcType=CHAR}
+      and oi.id is null
+    order by s.carriage_id, s.seat_index, s.seat_label
+    for update
+  </select>
 </mapper>
