@@ -7,19 +7,19 @@
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
     <version>3.3.13</version>
-    <relativePath/> <!-- lookup parent from repository -->
+    <!-- lookup parent from repository -->
+    <relativePath/>
   </parent>
   <groupId>com.trainticketing</groupId>
   <artifactId>train-ticketing</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>TrainTicketing</name>
-  <description>高仿 12306 火车票购票系统：分布式高并发学习项目</description>
+  <description>高仿12306火车票购票系统</description>
   <modules>
     <module>train-ticketing-member</module>
     <module>train-ticketing-common</module>
     <module>train-ticketing-gateway</module>
-    <module>train-ticketing-generator</module>
     <module>train-ticketing-business</module>
   </modules>
     <properties>
