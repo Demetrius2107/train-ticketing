@@ -23,11 +23,13 @@ import com.trainticketing.business.service.seat.SeatAllocationStrategy;
 import com.trainticketing.common.exception.BusinessException;
 import com.trainticketing.common.exception.BusinessExceptionEnum;
 import jakarta.annotation.Resource;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
@@ -44,9 +46,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 @Service
 public class OrderService {
@@ -80,7 +82,9 @@ public class OrderService {
     @Resource
     private SeatAllocationStrategy seatAllocationStrategy;
 
-    /** 自身代理引用：下单需先加分布式锁（非事务）再进入事务方法，避免同类自调用导致 @Transactional 失效 */
+    /**
+     * 自身代理引用：下单需先加分布式锁（非事务）再进入事务方法，避免同类自调用导致 @Transactional 失效
+     */
     @Lazy
     @Resource
     private OrderService self;
@@ -110,7 +114,7 @@ public class OrderService {
         TrainStation depart = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getDepartStationId());
         TrainStation arrive = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getArriveStationId());
         if (ObjectUtil.isNull(depart) || ObjectUtil.isNull(arrive)
-            || depart.getStationIndex() >= arrive.getStationIndex()) {
+                || depart.getStationIndex() >= arrive.getStationIndex()) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
         }
         // 分布式锁：同排班同座位类型串行化，不同座位类型可并行
@@ -119,7 +123,7 @@ public class OrderService {
         boolean locked = false;
         try {
             locked = lock.tryLock(TicketLockConfig.LOCK_WAIT_SECONDS, TicketLockConfig.LOCK_LEASE_SECONDS,
-                java.util.concurrent.TimeUnit.SECONDS);
+                    java.util.concurrent.TimeUnit.SECONDS);
             if (!locked) {
                 throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
             }
@@ -134,17 +138,21 @@ public class OrderService {
         }
     }
 
-    /** 幂等缓存 key 前缀：order:idem:{memberId}:{idempotentKey} */
+    /**
+     * 幂等缓存 key 前缀：order:idem:{memberId}:{idempotentKey}
+     */
     private static final String IDEM_KEY_PREFIX = "order:idem:";
-    /** 幂等占位有效期：5 分钟，覆盖下单+支付窗口 */
+    /**
+     * 幂等占位有效期：5 分钟，覆盖下单+支付窗口
+     */
     private static final java.time.Duration IDEM_TTL = java.time.Duration.ofMinutes(5);
 
     /**
      * 幂等占位：SETNX 语义，key 存在返回 false（重复提交），否则占位返回 true。
      * 用 Redisson RBucket.setIfAbsent 实现，与下单链路共用 RedissonClient。
      *
-     * @param memberId       会员ID
-     * @param idempotentKey  幂等键（前端生成）
+     * @param memberId      会员ID
+     * @param idempotentKey 幂等键（前端生成）
      * @return true 首次提交可继续；false 重复提交
      */
     private boolean acquireIdempotent(Long memberId, String idempotentKey) {
@@ -156,10 +164,10 @@ public class OrderService {
      * 下单事务体：Redis 预扣 + DB 选座（行锁兜底）+ 生成订单/明细。
      * 由 {@link #save} 持分布式锁后通过 self 代理调用，保证 @Transactional 代理生效。
      *
-     * @param req         下单请求
-     * @param dailyTrain  排班（锁外已查）
-     * @param depart      出发经停站
-     * @param arrive      到达经停站
+     * @param req        下单请求
+     * @param dailyTrain 排班（锁外已查）
+     * @param depart     出发经停站
+     * @param arrive     到达经停站
      * @return 订单号
      */
     @Transactional
@@ -167,18 +175,18 @@ public class OrderService {
         int need = req.getPassengers().size();
         // 1. Redis Lua 原子预扣区间余票（按乘车人数），防并发超卖
         long remainAfter = ticketCacheService.decrRemaining(
-            req.getDailyTrainId(), req.getSeatType(), depart.getStationIndex(), arrive.getStationIndex(), need);
+                req.getDailyTrainId(), req.getSeatType(), depart.getStationIndex(), arrive.getStationIndex(), need);
         if (remainAfter < 0) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_SEAT_NOT_ENOUGH);
         }
         // 缓存-DB 一致性：预扣成功后，若本事务回滚（DB 写入失败/校验异常）则回补已扣缓存，
         // 避免缓存凭空减少。提交成功则保留扣减。
         registerRollbackCompensate(req.getDailyTrainId(), req.getSeatType(),
-            depart.getStationIndex(), arrive.getStationIndex(), need);
+                depart.getStationIndex(), arrive.getStationIndex(), need);
         // 2. DB 选座（FOR UPDATE 全量加锁）+ 贪心策略分配相邻座位
         List<DailyTrainSeat> availableSeats = dailyTrainSeatMapper.selectAllAvailableForUpdate(
-            req.getDailyTrainId(), depart.getStationIndex(), arrive.getStationIndex(),
-            req.getSeatType());
+                req.getDailyTrainId(), depart.getStationIndex(), arrive.getStationIndex(),
+                req.getSeatType());
         List<DailyTrainSeat> allocated = seatAllocationStrategy.allocate(availableSeats, req.getSeatType(), need);
         if (CollUtil.isEmpty(allocated) || allocated.size() < need) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_SEAT_NOT_ENOUGH);
@@ -247,7 +255,7 @@ public class OrderService {
         // CAS 状态转换：PENDING→CANCELLED，先判状态再删明细，防并发支付竞态。
         // 若已被支付（CAS 失败），不删明细直接报错，避免已支付订单丢明细。
         int updated = trainOrderMapper.updateStatusIfMatch(order.getId(),
-            OrderStatusEnum.PENDING.getCode(), OrderStatusEnum.CANCELLED.getCode(), null, null);
+                OrderStatusEnum.PENDING.getCode(), OrderStatusEnum.CANCELLED.getCode(), null, null);
         if (updated == 0) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_CONCURRENT_CONFLICT);
         }
@@ -319,7 +327,7 @@ public class OrderService {
      * 订单支付：仅待支付订单可支付，且未超过支付过期时间；
      * 支付成功后状态置为已支付并记录支付时间（事务）。
      *
-     * @param orderNo 订单号
+     * @param orderNo  订单号
      * @param memberId 支付会员ID
      */
     @Transactional
@@ -337,12 +345,12 @@ public class OrderService {
         }
         // 支付过期校验：超过 expire_time 视为超时不可支付
         if (ObjectUtil.isNotNull(order.getExpireTime())
-            && order.getExpireTime().before(new Date())) {
+                && order.getExpireTime().before(new Date())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_PAY_EXPIRED);
         }
         // CAS 状态转换：PENDING→PAID，防并发关单竞态（影响行数0说明已被关单）
         int updated = trainOrderMapper.updateStatusIfMatch(order.getId(),
-            OrderStatusEnum.PENDING.getCode(), OrderStatusEnum.PAID.getCode(), new Date(), null);
+                OrderStatusEnum.PENDING.getCode(), OrderStatusEnum.PAID.getCode(), new Date(), null);
         if (updated == 0) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_CONCURRENT_CONFLICT);
         }
@@ -373,7 +381,7 @@ public class OrderService {
         // CAS 状态转换：PAID→REFUNDED，先判状态再删明细，防重复退票竞态。
         // 若状态已变（CAS 失败），不删明细直接报错，避免丢明细。
         int updated = trainOrderMapper.updateStatusIfMatch(order.getId(),
-            OrderStatusEnum.PAID.getCode(), OrderStatusEnum.REFUNDED.getCode(), null, new Date());
+                OrderStatusEnum.PAID.getCode(), OrderStatusEnum.REFUNDED.getCode(), null, new Date());
         if (updated == 0) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_CONCURRENT_CONFLICT);
         }
@@ -401,7 +409,7 @@ public class OrderService {
             // CAS 状态转换：PENDING→CANCELLED，先判状态再删明细。
             // 若用户刚支付成功（CAS 失败），跳过该订单，不删明细不回补。
             int updated = trainOrderMapper.updateStatusIfMatch(order.getId(),
-                OrderStatusEnum.PENDING.getCode(), OrderStatusEnum.CANCELLED.getCode(), null, null);
+                    OrderStatusEnum.PENDING.getCode(), OrderStatusEnum.CANCELLED.getCode(), null, null);
             if (updated == 0) {
                 LOG.info("超时关单跳过（订单状态已变更） orderNo={}", order.getOrderNo());
                 continue;

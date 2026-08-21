@@ -3,6 +3,7 @@ package com.trainticketing.business.req;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+
 import java.time.LocalDate;
 import java.util.List;
 
@@ -12,41 +13,57 @@ import java.util.List;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class OrderSaveReq {
 
-    /** 会员id */
+    /**
+     * 会员id
+     */
     @NotNull(message = "[会员id]不能为空")
     private Long memberId;
 
-    /** 幂等键（前端生成，同一批下单请求携带相同值，防重复提交） */
+    /**
+     * 幂等键（前端生成，同一批下单请求携带相同值，防重复提交）
+     */
     @NotBlank(message = "[幂等键]不能为空")
     private String idempotentKey;
 
-    /** 排班id */
+    /**
+     * 排班id
+     */
     @NotNull(message = "[排班id]不能为空")
     private Long dailyTrainId;
 
-    /** 出发站id */
+    /**
+     * 出发站id
+     */
     @NotNull(message = "[出发站id]不能为空")
     private Long departStationId;
 
-    /** 到达站id */
+    /**
+     * 到达站id
+     */
     @NotNull(message = "[到达站id]不能为空")
     private Long arriveStationId;
 
-    /** 乘车日期 */
+    /**
+     * 乘车日期
+     */
     @NotNull(message = "[乘车日期]不能为空")
     private LocalDate runDate;
 
-    /** 座位类型|枚举[SeatTypeEnum] */
+    /**
+     * 座位类型|枚举[SeatTypeEnum]
+     */
     @NotBlank(message = "[座位类型]不能为空")
     private String seatType;
 
-    /** 乘车人列表（姓名+身份证，下单时快照） */
+    /**
+     * 乘车人列表（姓名+身份证，下单时快照）
+     */
     @NotEmpty(message = "[乘车人]不能为空")
     private List<PassengerReq> passengers;
 
@@ -117,15 +134,15 @@ public class OrderSaveReq {
     @Override
     public String toString() {
         return "OrderSaveReq{" +
-            "memberId=" + memberId +
-            ", idempotentKey='" + idempotentKey + '\'' +
-            ", dailyTrainId=" + dailyTrainId +
-            ", departStationId=" + departStationId +
-            ", arriveStationId=" + arriveStationId +
-            ", runDate=" + runDate +
-            ", seatType='" + seatType + '\'' +
-            ", passengers=" + passengers +
-            '}';
+                "memberId=" + memberId +
+                ", idempotentKey='" + idempotentKey + '\'' +
+                ", dailyTrainId=" + dailyTrainId +
+                ", departStationId=" + departStationId +
+                ", arriveStationId=" + arriveStationId +
+                ", runDate=" + runDate +
+                ", seatType='" + seatType + '\'' +
+                ", passengers=" + passengers +
+                '}';
     }
 
     /**
@@ -134,14 +151,20 @@ public class OrderSaveReq {
      */
     public static class PassengerReq {
 
-        /** 乘车人id */
+        /**
+         * 乘车人id
+         */
         private Long passengerId;
 
-        /** 姓名 */
+        /**
+         * 姓名
+         */
         @NotBlank(message = "[乘车人姓名]不能为空")
         private String name;
 
-        /** 身份证号 */
+        /**
+         * 身份证号
+         */
         @NotBlank(message = "[身份证号]不能为空")
         private String idCard;
 
@@ -172,10 +195,10 @@ public class OrderSaveReq {
         @Override
         public String toString() {
             return "PassengerReq{" +
-                "passengerId=" + passengerId +
-                ", name='" + name + '\'' +
-                ", idCard='" + idCard + '\'' +
-                '}';
+                    "passengerId=" + passengerId +
+                    ", name='" + name + '\'' +
+                    ", idCard='" + idCard + '\'' +
+                    '}';
         }
     }
 }

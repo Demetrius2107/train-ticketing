@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>Title: DailyTrainController</p>
- * <p>Description: 每日排班管理接口（走网关 http://localhost:8000/business/admin/daily-train/**）</p>
+ * <p>Description: 每日排班管理接口</p>
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu

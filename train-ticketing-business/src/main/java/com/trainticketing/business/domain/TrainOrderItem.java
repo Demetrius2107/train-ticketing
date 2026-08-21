@@ -10,46 +10,70 @@ import java.util.Date;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class TrainOrderItem {
 
-    /** 主键ID */
+    /**
+     * 主键ID
+     */
     private Long id;
 
-    /** 订单id */
+    /**
+     * 订单id
+     */
     private Long orderId;
 
-    /** 乘车人id */
+    /**
+     * 乘车人id
+     */
     private Long passengerId;
 
-    /** 乘车人姓名（下单时快照） */
+    /**
+     * 乘车人姓名（下单时快照）
+     */
     private String passengerName;
 
-    /** 身份证号（下单时快照） */
+    /**
+     * 身份证号（下单时快照）
+     */
     private String idCard;
 
-    /** 当日座位id */
+    /**
+     * 当日座位id
+     */
     private Long dailyTrainSeatId;
 
-    /** 座位类型|枚举[SeatTypeEnum] */
+    /**
+     * 座位类型|枚举[SeatTypeEnum]
+     */
     private String seatType;
 
-    /** 票价（元） */
+    /**
+     * 票价（元）
+     */
     private BigDecimal price;
 
-    /** 出发站序（区间占用起点） */
+    /**
+     * 出发站序（区间占用起点）
+     */
     private Integer departIndex;
 
-    /** 到达站序（区间占用终点） */
+    /**
+     * 到达站序（区间占用终点）
+     */
     private Integer arriveIndex;
 
-    /** 新增时间 */
+    /**
+     * 新增时间
+     */
     private Date createTime;
 
-    /** 修改时间 */
+    /**
+     * 修改时间
+     */
     private Date updateTime;
 
     public Long getId() {
@@ -151,18 +175,18 @@ public class TrainOrderItem {
     @Override
     public String toString() {
         return "TrainOrderItem{" +
-            "id=" + id +
-            ", orderId=" + orderId +
-            ", passengerId=" + passengerId +
-            ", passengerName='" + passengerName + '\'' +
-            ", idCard='" + idCard + '\'' +
-            ", dailyTrainSeatId=" + dailyTrainSeatId +
-            ", seatType='" + seatType + '\'' +
-            ", price=" + price +
-            ", departIndex=" + departIndex +
-            ", arriveIndex=" + arriveIndex +
-            ", createTime=" + createTime +
-            ", updateTime=" + updateTime +
-            '}';
+                "id=" + id +
+                ", orderId=" + orderId +
+                ", passengerId=" + passengerId +
+                ", passengerName='" + passengerName + '\'' +
+                ", idCard='" + idCard + '\'' +
+                ", dailyTrainSeatId=" + dailyTrainSeatId +
+                ", seatType='" + seatType + '\'' +
+                ", price=" + price +
+                ", departIndex=" + departIndex +
+                ", arriveIndex=" + arriveIndex +
+                ", createTime=" + createTime +
+                ", updateTime=" + updateTime +
+                '}';
     }
 }

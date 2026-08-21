@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>Title: OrderController</p>
- * <p>Description: 订单接口（用户侧，走网关 http://localhost:8000/business/order/**）</p>
+ * <p>Description: 订单接口 用户侧</p>
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu

@@ -15,9 +15,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 @SpringBootApplication
 @ComponentScan("com.trainticketing")
@@ -25,13 +25,13 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class BusinessApplication {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BusinessApplication.class);
+    private static final Logger LOG = LoggerFactory.getLogger(BusinessApplication.class);
 
-  public static void main(String[] args) {
-    SpringApplication app = new SpringApplication(BusinessApplication.class);
-    Environment env = app.run(args).getEnvironment();
-    LOG.info("启动成功！！");
-    LOG.info("测试地址: \thttp://127.0.0.1:{}{}/hello", env.getProperty("server.port"), env.getProperty("server.servlet.context-path"));
-  }
+    public static void main(String[] args) {
+        SpringApplication app = new SpringApplication(BusinessApplication.class);
+        Environment env = app.run(args).getEnvironment();
+        LOG.info("Business服务启动成功！！喵喵喵");
+        LOG.info("测试地址: \thttp://127.0.0.1:{}{}/hello", env.getProperty("server.port"), env.getProperty("server.servlet.context-path"));
+    }
 
 }

@@ -8,31 +8,45 @@ import java.util.Date;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class TrainCarriage {
 
-    /** 主键ID */
+    /**
+     * 主键ID
+     */
     private Long id;
 
-    /** 车次id */
+    /**
+     * 车次id
+     */
     private Long trainId;
 
-    /** 车厢号，从1开始 */
+    /**
+     * 车厢号，从1开始
+     */
     private Integer carriageIndex;
 
-    /** 座位类型|枚举[SeatTypeEnum]: 1商务座 2一等座 3二等座 4硬卧 5软卧 */
+    /**
+     * 座位类型|枚举[SeatTypeEnum]: 1商务座 2一等座 3二等座 4硬卧 5软卧
+     */
     private String seatType;
 
-    /** 座位数 */
+    /**
+     * 座位数
+     */
     private Integer seatCount;
 
-    /** 新增时间 */
+    /**
+     * 新增时间
+     */
     private Date createTime;
 
-    /** 修改时间 */
+    /**
+     * 修改时间
+     */
     private Date updateTime;
 
     public Long getId() {

@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>Title: DailyTrainSeatController</p>
- * <p>Description: 当日座位接口（走网关 http://localhost:8000/business/admin/daily-train-seat/**）</p>
+ * <p>Description: 当日座位接口 走网关 </p>
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu

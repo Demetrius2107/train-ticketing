@@ -10,49 +10,75 @@ import java.util.List;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class OrderQueryResp {
 
-    /** 订单id */
+    /**
+     * 订单id
+     */
     private Long id;
 
-    /** 订单号 */
+    /**
+     * 订单号
+     */
     private String orderNo;
 
-    /** 会员id */
+    /**
+     * 会员id
+     */
     private Long memberId;
 
-    /** 车次id */
+    /**
+     * 车次id
+     */
     private Long trainId;
 
-    /** 出发站id */
+    /**
+     * 出发站id
+     */
     private Long departStationId;
 
-    /** 到达站id */
+    /**
+     * 到达站id
+     */
     private Long arriveStationId;
 
-    /** 乘车日期 */
+    /**
+     * 乘车日期
+     */
     private Date runDate;
 
-    /** 状态|枚举[OrderStatusEnum] */
+    /**
+     * 状态|枚举[OrderStatusEnum]
+     */
     private String status;
 
-    /** 订单总金额（元） */
+    /**
+     * 订单总金额（元）
+     */
     private BigDecimal totalAmount;
 
-    /** 支付时间 */
+    /**
+     * 支付时间
+     */
     private Date payTime;
 
-    /** 退款时间 */
+    /**
+     * 退款时间
+     */
     private Date refundTime;
 
-    /** 下单时间 */
+    /**
+     * 下单时间
+     */
     private Date createTime;
 
-    /** 明细列表 */
+    /**
+     * 明细列表
+     */
     private List<OrderItemResp> items;
 
     public Long getId() {
@@ -165,22 +191,34 @@ public class OrderQueryResp {
      */
     public static class OrderItemResp {
 
-        /** 乘车人姓名 */
+        /**
+         * 乘车人姓名
+         */
         private String passengerName;
 
-        /** 身份证号 */
+        /**
+         * 身份证号
+         */
         private String idCard;
 
-        /** 座位类型|枚举[SeatTypeEnum] */
+        /**
+         * 座位类型|枚举[SeatTypeEnum]
+         */
         private String seatType;
 
-        /** 票价（元） */
+        /**
+         * 票价（元）
+         */
         private BigDecimal price;
 
-        /** 出发站序 */
+        /**
+         * 出发站序
+         */
         private Integer departIndex;
 
-        /** 到达站序 */
+        /**
+         * 到达站序
+         */
         private Integer arriveIndex;
 
         public String getPassengerName() {

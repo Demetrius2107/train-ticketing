@@ -9,34 +9,50 @@ import java.time.LocalTime;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class DailyTrainQueryResp {
 
-    /** 主键ID */
+    /**
+     * 主键ID
+     */
     private Long id;
 
-    /** 车次id */
+    /**
+     * 车次id
+     */
     private Long trainId;
 
-    /** 运行日期 */
+    /**
+     * 运行日期
+     */
     private LocalDate runDate;
 
-    /** 始发站id */
+    /**
+     * 始发站id
+     */
     private Long startStationId;
 
-    /** 终到站id */
+    /**
+     * 终到站id
+     */
     private Long endStationId;
 
-    /** 始发站发车时间 */
+    /**
+     * 始发站发车时间
+     */
     private LocalTime startTime;
 
-    /** 终到站到达时间 */
+    /**
+     * 终到站到达时间
+     */
     private LocalTime endTime;
 
-    /** 状态|枚举[DailyTrainStatusEnum]: 0停运 1运行 */
+    /**
+     * 状态|枚举[DailyTrainStatusEnum]: 0停运 1运行
+     */
     private String status;
 
     public Long getId() {
@@ -106,14 +122,14 @@ public class DailyTrainQueryResp {
     @Override
     public String toString() {
         return "DailyTrainQueryResp{" +
-            "id=" + id +
-            ", trainId=" + trainId +
-            ", runDate=" + runDate +
-            ", startStationId=" + startStationId +
-            ", endStationId=" + endStationId +
-            ", startTime=" + startTime +
-            ", endTime=" + endTime +
-            ", status='" + status + '\'' +
-            '}';
+                "id=" + id +
+                ", trainId=" + trainId +
+                ", runDate=" + runDate +
+                ", startStationId=" + startStationId +
+                ", endStationId=" + endStationId +
+                ", startTime=" + startTime +
+                ", endTime=" + endTime +
+                ", status='" + status + '\'' +
+                '}';
     }
 }

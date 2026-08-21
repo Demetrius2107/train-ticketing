@@ -3,6 +3,7 @@ package com.trainticketing.business.req;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+
 import java.time.LocalDate;
 
 /**
@@ -11,17 +12,21 @@ import java.time.LocalDate;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class DailyTrainSaveReq {
 
-    /** 车次id */
+    /**
+     * 车次id
+     */
     @NotNull(message = "[车次]不能为空")
     private Long trainId;
 
-    /** 运行日期，不能早于今天（如 2026-08-20） */
+    /**
+     * 运行日期，不能早于今天（如 2026-08-20）
+     */
     @NotNull(message = "[运行日期]不能为空")
     @FutureOrPresent(message = "[运行日期]不能早于今天")
     private LocalDate runDate;
@@ -45,8 +50,8 @@ public class DailyTrainSaveReq {
     @Override
     public String toString() {
         return "DailyTrainSaveReq{" +
-            "trainId=" + trainId +
-            ", runDate=" + runDate +
-            '}';
+                "trainId=" + trainId +
+                ", runDate=" + runDate +
+                '}';
     }
 }

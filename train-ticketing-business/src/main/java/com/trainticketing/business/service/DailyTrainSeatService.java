@@ -14,11 +14,13 @@ import com.trainticketing.business.mapper.TrainStationMapper;
 import com.trainticketing.common.exception.BusinessException;
 import com.trainticketing.common.exception.BusinessExceptionEnum;
 import jakarta.annotation.Resource;
+
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -30,9 +32,9 @@ import org.springframework.stereotype.Service;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 @Service
 public class DailyTrainSeatService {
@@ -130,10 +132,10 @@ public class DailyTrainSeatService {
         for (Map.Entry<String, Integer> entry : seatTypeCount.entrySet()) {
             for (int i = 0; i < indexes.size() - 1; i++) {
                 ticketCacheService.initRemaining(dailyTrainId, entry.getKey(),
-                    indexes.get(i), entry.getValue());
+                        indexes.get(i), entry.getValue());
             }
         }
         LOG.info("排班 {} 余票缓存初始化完成，座位类型数={}，相邻段数={}",
-            dailyTrainId, seatTypeCount.size(), Math.max(0, indexes.size() - 1));
+                dailyTrainId, seatTypeCount.size(), Math.max(0, indexes.size() - 1));
     }
 }

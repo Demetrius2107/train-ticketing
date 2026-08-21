@@ -8,40 +8,60 @@ import java.util.Date;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class DailyTrainSeat {
 
-    /** 主键ID */
+    /**
+     * 主键ID
+     */
     private Long id;
 
-    /** 每日车次id */
+    /**
+     * 每日车次id
+     */
     private Long dailyTrainId;
 
-    /** 座位档案id */
+    /**
+     * 座位档案id
+     */
     private Long trainSeatId;
 
-    /** 车厢id */
+    /**
+     * 车厢id
+     */
     private Long carriageId;
 
-    /** 排号 */
+    /**
+     * 排号
+     */
     private Integer seatIndex;
 
-    /** 座位字母 */
+    /**
+     * 座位字母
+     */
     private String seatLabel;
 
-    /** 座位类型|枚举[SeatTypeEnum]: 1商务座 2一等座 3二等座 4硬卧 5软卧 */
+    /**
+     * 座位类型|枚举[SeatTypeEnum]: 1商务座 2一等座 3二等座 4硬卧 5软卧
+     */
     private String seatType;
 
-    /** 售卖状态: 0可售 1已售 2锁定 */
+    /**
+     * 售卖状态: 0可售 1已售 2锁定
+     */
     private String saleStatus;
 
-    /** 新增时间 */
+    /**
+     * 新增时间
+     */
     private Date createTime;
 
-    /** 修改时间 */
+    /**
+     * 修改时间
+     */
     private Date updateTime;
 
     public Long getId() {

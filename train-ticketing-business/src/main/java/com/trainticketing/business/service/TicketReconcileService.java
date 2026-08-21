@@ -8,10 +8,12 @@ import com.trainticketing.business.mapper.DailyTrainMapper;
 import com.trainticketing.business.mapper.DailyTrainSeatMapper;
 import com.trainticketing.business.mapper.TrainStationMapper;
 import jakarta.annotation.Resource;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,9 +28,9 @@ import org.springframework.stereotype.Service;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-17
  * @updateTime 2026-08-17
+ * @since 1.0
  */
 @Service
 public class TicketReconcileService {
@@ -66,7 +68,7 @@ public class TicketReconcileService {
                 reconciled += reconcileDailyTrain(dailyTrain);
             } catch (Exception e) {
                 LOG.error("余票对账单排班失败 dailyTrainId={}, error={}",
-                    dailyTrain.getId(), e.getMessage());
+                        dailyTrain.getId(), e.getMessage());
             }
         }
         LOG.info("余票对账结束，重建排班数={}/{}", reconciled, runningList.size());

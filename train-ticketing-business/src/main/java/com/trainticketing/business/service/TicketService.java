@@ -15,9 +15,11 @@ import com.trainticketing.business.resp.TrainTicketResp;
 import com.trainticketing.common.exception.BusinessException;
 import com.trainticketing.common.exception.BusinessExceptionEnum;
 import jakarta.annotation.Resource;
+
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,9 +30,9 @@ import org.springframework.stereotype.Service;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 @Service
 public class TicketService {
@@ -67,11 +69,11 @@ public class TicketService {
         TrainStation depart = trainStationMapper.selectByStation(dailyTrain.getTrainId(), departStationId);
         TrainStation arrive = trainStationMapper.selectByStation(dailyTrain.getTrainId(), arriveStationId);
         if (ObjectUtil.isNull(depart) || ObjectUtil.isNull(arrive)
-            || depart.getStationIndex() >= arrive.getStationIndex()) {
+                || depart.getStationIndex() >= arrive.getStationIndex()) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
         }
         return dailyTrainSeatMapper.selectRemainingByInterval(dailyTrainId,
-            depart.getStationIndex(), arrive.getStationIndex());
+                depart.getStationIndex(), arrive.getStationIndex());
     }
 
     /**
@@ -113,7 +115,7 @@ public class TicketService {
         resp.setDepartIndex(depart.getStationIndex());
         resp.setArriveIndex(arrive.getStationIndex());
         resp.setRemainingList(dailyTrainSeatMapper.selectRemainingByInterval(dailyTrain.getId(),
-            depart.getStationIndex(), arrive.getStationIndex()));
+                depart.getStationIndex(), arrive.getStationIndex()));
         return resp;
     }
 }

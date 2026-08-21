@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>Title: TrainSeatController</p>
- * <p>Description: 座位接口（走网关 http://localhost:8000/business/admin/train-seat/**）</p>
+ * <p>Description: 座位接口</p>
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu

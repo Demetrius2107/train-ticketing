@@ -9,37 +9,55 @@ import java.util.Date;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class Train {
 
-    /** 主键ID */
+    /**
+     * 主键ID
+     */
     private Long id;
 
-    /** 车次编号，如 G1234（唯一） */
+    /**
+     * 车次编号，如 G1234（唯一）
+     */
     private String code;
 
-    /** 车次类型|枚举[TrainTypeEnum]: 1高铁 2动车 3特快 4普快 */
+    /**
+     * 车次类型|枚举[TrainTypeEnum]: 1高铁 2动车 3特快 4普快
+     */
     private String type;
 
-    /** 始发站id */
+    /**
+     * 始发站id
+     */
     private Long startStationId;
 
-    /** 终到站id */
+    /**
+     * 终到站id
+     */
     private Long endStationId;
 
-    /** 始发站发车时间 */
+    /**
+     * 始发站发车时间
+     */
     private LocalTime startTime;
 
-    /** 终到站到达时间 */
+    /**
+     * 终到站到达时间
+     */
     private LocalTime endTime;
 
-    /** 新增时间 */
+    /**
+     * 新增时间
+     */
     private Date createTime;
 
-    /** 修改时间 */
+    /**
+     * 修改时间
+     */
     private Date updateTime;
 
     public Long getId() {

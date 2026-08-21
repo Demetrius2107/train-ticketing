@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>Title: TrainPriceController</p>
- * <p>Description: 票价管理接口（走网关 http://localhost:8000/business/admin/train-price/**）</p>
+ * <p>Description: 票价管理接口</p>
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu

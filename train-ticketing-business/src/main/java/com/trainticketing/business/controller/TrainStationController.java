@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>Title: TrainStationController</p>
- * <p>Description: 车次经停站管理接口（走网关 http://localhost:8000/business/admin/train-station/**）</p>
+ * <p>Description: 车次经停站管理接口</p>
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu

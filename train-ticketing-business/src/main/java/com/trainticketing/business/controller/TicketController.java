@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>Title: TicketController</p>
- * <p>Description: 余票查询接口（用户侧，走网关 http://localhost:8000/business/ticket/**）</p>
+ * <p>Description: 余票查询接口 用户侧</p>
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu

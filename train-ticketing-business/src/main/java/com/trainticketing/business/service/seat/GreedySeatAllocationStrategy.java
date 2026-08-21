@@ -3,11 +3,13 @@ package com.trainticketing.business.service.seat;
 import cn.hutool.core.collection.CollUtil;
 import com.trainticketing.business.domain.DailyTrainSeat;
 import com.trainticketing.business.enums.SeatTypeEnum;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,9 +25,9 @@ import org.springframework.stereotype.Component;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-17
  * @updateTime 2026-08-17
+ * @since 1.0
  */
 @Component
 public class GreedySeatAllocationStrategy implements SeatAllocationStrategy {
@@ -147,8 +149,8 @@ public class GreedySeatAllocationStrategy implements SeatAllocationStrategy {
             labelCmp = Comparator.comparingInt((DailyTrainSeat s) -> labels.indexOf(s.getSeatLabel()));
         }
         copy.sort(labelCmp
-            .thenComparingLong(DailyTrainSeat::getCarriageId)
-            .thenComparingInt(DailyTrainSeat::getSeatIndex));
+                .thenComparingLong(DailyTrainSeat::getCarriageId)
+                .thenComparingInt(DailyTrainSeat::getSeatIndex));
         return copy;
     }
 
@@ -170,7 +172,7 @@ public class GreedySeatAllocationStrategy implements SeatAllocationStrategy {
         Map<Long, Map<Integer, List<DailyTrainSeat>>> grouped = new LinkedHashMap<>();
         for (DailyTrainSeat s : seats) {
             grouped.computeIfAbsent(s.getCarriageId(), k -> new LinkedHashMap<>())
-                .computeIfAbsent(s.getSeatIndex(), k -> new ArrayList<>()).add(s);
+                    .computeIfAbsent(s.getSeatIndex(), k -> new ArrayList<>()).add(s);
         }
         return grouped;
     }

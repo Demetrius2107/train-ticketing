@@ -6,22 +6,32 @@ package com.trainticketing.business.enums;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public enum OrderStatusEnum {
 
-    /** 待支付 */
+    /**
+     * 待支付
+     */
     PENDING("0"),
-    /** 已支付 */
+    /**
+     * 已支付
+     */
     PAID("1"),
-    /** 已取消 */
+    /**
+     * 已取消
+     */
     CANCELLED("2"),
-    /** 已退票 */
+    /**
+     * 已退票
+     */
     REFUNDED("3");
 
-    /** 状态编码 */
+    /**
+     * 状态编码
+     */
     private final String code;
 
     OrderStatusEnum(String code) {

@@ -1,6 +1,7 @@
 package com.trainticketing.business.service.seat;
 
 import com.trainticketing.business.domain.DailyTrainSeat;
+
 import java.util.List;
 
 /**
@@ -11,9 +12,9 @@ import java.util.List;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-17
  * @updateTime 2026-08-17
+ * @since 1.0
  */
 public interface SeatAllocationStrategy {
 

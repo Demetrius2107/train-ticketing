@@ -8,31 +8,45 @@ import java.util.Date;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class Station {
 
-    /** 主键ID */
+    /**
+     * 主键ID
+     */
     private Long id;
 
-    /** 车站名称（唯一） */
+    /**
+     * 车站名称（唯一）
+     */
     private String name;
 
-    /** 车站拼音全拼 */
+    /**
+     * 车站拼音全拼
+     */
     private String namePinyin;
 
-    /** 车站拼音简拼 */
+    /**
+     * 车站拼音简拼
+     */
     private String namePy;
 
-    /** 所属城市 */
+    /**
+     * 所属城市
+     */
     private String city;
 
-    /** 新增时间 */
+    /**
+     * 新增时间
+     */
     private Date createTime;
 
-    /** 修改时间 */
+    /**
+     * 修改时间
+     */
     private Date updateTime;
 
     public Long getId() {

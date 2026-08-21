@@ -6,22 +6,32 @@ package com.trainticketing.business.enums;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public enum TrainTypeEnum {
 
-    /** 高铁 */
+    /**
+     * 高铁
+     */
     HIGH_SPEED("1"),
-    /** 动车 */
+    /**
+     * 动车
+     */
     EMU("2"),
-    /** 特快 */
+    /**
+     * 特快
+     */
     EXPRESS("3"),
-    /** 普快 */
+    /**
+     * 普快
+     */
     NORMAL("4");
 
-    /** 类型编码 */
+    /**
+     * 类型编码
+     */
     private final String code;
 
     TrainTypeEnum(String code) {

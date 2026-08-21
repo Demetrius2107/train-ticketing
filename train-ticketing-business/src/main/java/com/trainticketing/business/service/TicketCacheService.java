@@ -4,9 +4,11 @@ import cn.hutool.core.collection.CollUtil;
 import com.trainticketing.business.mapper.DailyTrainSeatMapper;
 import com.trainticketing.business.resp.SeatRemainingResp;
 import jakarta.annotation.Resource;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -24,16 +26,18 @@ import org.springframework.stereotype.Service;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-17
+ * @since 1.0
  */
 @Service
 public class TicketCacheService {
 
     private static final Logger LOG = LoggerFactory.getLogger(TicketCacheService.class);
 
-    /** 余票缓存 key 前缀：ticket:remain:{dailyTrainId}:{seatType} */
+    /**
+     * 余票缓存 key 前缀：ticket:remain:{dailyTrainId}:{seatType}
+     */
     private static final String REMAIN_KEY_PREFIX = "ticket:remain:";
 
     /**
@@ -43,27 +47,29 @@ public class TicketCacheService {
      * 单条 Lua 在 Redis 中原子执行，杜绝并发超卖与跨区间重叠超卖。
      */
     private static final String DECR_SCRIPT =
-        "local need = tonumber(ARGV[1]) "
-        + "local fields = {} "
-        + "for i = 2, #ARGV do "
-        + "  local f = ARGV[i] "
-        + "  local remain = redis.call('HGET', KEYS[1], f) "
-        + "  if remain == false then return -1 end "
-        + "  if tonumber(remain) < need then return -1 end "
-        + "  fields[i] = f "
-        + "end "
-        + "for i = 2, #ARGV do "
-        + "  redis.call('HINCRBY', KEYS[1], ARGV[i], -need) "
-        + "end "
-        + "return 1";
+            "local need = tonumber(ARGV[1]) "
+                    + "local fields = {} "
+                    + "for i = 2, #ARGV do "
+                    + "  local f = ARGV[i] "
+                    + "  local remain = redis.call('HGET', KEYS[1], f) "
+                    + "  if remain == false then return -1 end "
+                    + "  if tonumber(remain) < need then return -1 end "
+                    + "  fields[i] = f "
+                    + "end "
+                    + "for i = 2, #ARGV do "
+                    + "  redis.call('HINCRBY', KEYS[1], ARGV[i], -need) "
+                    + "end "
+                    + "return 1";
 
-    /** Lua 多段回补脚本：ARGV[1]=回补数量，ARGV[2..]=各相邻段 field */
+    /**
+     * Lua 多段回补脚本：ARGV[1]=回补数量，ARGV[2..]=各相邻段 field
+     */
     private static final String INCR_SCRIPT =
-        "local count = tonumber(ARGV[1]) "
-        + "for i = 2, #ARGV do "
-        + "  redis.call('HINCRBY', KEYS[1], ARGV[i], count) "
-        + "end "
-        + "return 1";
+            "local count = tonumber(ARGV[1]) "
+                    + "for i = 2, #ARGV do "
+                    + "  redis.call('HINCRBY', KEYS[1], ARGV[i], count) "
+                    + "end "
+                    + "return 1";
 
     private final DefaultRedisScript<Long> decrScript = new DefaultRedisScript<>(DECR_SCRIPT, Long.class);
     private final DefaultRedisScript<Long> incrScript = new DefaultRedisScript<>(INCR_SCRIPT, Long.class);
@@ -141,7 +147,7 @@ public class TicketCacheService {
         }
         // 懒加载回填：以 DB 区间余票为准，回填路径上每个缺失的相邻段
         List<SeatRemainingResp> remaining = dailyTrainSeatMapper.selectRemainingByInterval(
-            dailyTrainId, departIndex, arriveIndex);
+                dailyTrainId, departIndex, arriveIndex);
         int dbCount = 0;
         for (SeatRemainingResp resp : remaining) {
             if (seatType.equals(resp.getSeatType())) {
@@ -201,12 +207,12 @@ public class TicketCacheService {
                 argv.add(remainField(seg));
             }
             Long ret = stringRedisTemplate.execute(decrScript,
-                Arrays.asList(remainKey(dailyTrainId, seatType)),
-                argv.toArray());
+                    Arrays.asList(remainKey(dailyTrainId, seatType)),
+                    argv.toArray());
             return ret == null ? -1 : ret;
         } catch (Exception e) {
             LOG.error("Lua 预扣余票失败 dailyTrainId={}, seatType={}, [{}-{}], error={}",
-                dailyTrainId, seatType, departIndex, arriveIndex, e.getMessage());
+                    dailyTrainId, seatType, departIndex, arriveIndex, e.getMessage());
             return -1;
         }
     }
@@ -229,11 +235,11 @@ public class TicketCacheService {
                 argv.add(remainField(seg));
             }
             stringRedisTemplate.execute(incrScript,
-                Arrays.asList(remainKey(dailyTrainId, seatType)),
-                argv.toArray());
+                    Arrays.asList(remainKey(dailyTrainId, seatType)),
+                    argv.toArray());
         } catch (Exception e) {
             LOG.error("Lua 回补余票失败 dailyTrainId={}, seatType={}, [{}-{}], error={}",
-                dailyTrainId, seatType, departIndex, arriveIndex, e.getMessage());
+                    dailyTrainId, seatType, departIndex, arriveIndex, e.getMessage());
         }
     }
 
@@ -258,7 +264,7 @@ public class TicketCacheService {
         for (Integer seg : segIndexes) {
             // 相邻段 [seg, seg+1] 的可售票数 = DB 该区间未被占用的座位数
             List<SeatRemainingResp> remaining = dailyTrainSeatMapper.selectRemainingByInterval(
-                dailyTrainId, seg, seg + 1);
+                    dailyTrainId, seg, seg + 1);
             int count = 0;
             for (SeatRemainingResp resp : remaining) {
                 if (seatType.equals(resp.getSeatType())) {

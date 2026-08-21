@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>Title: TicketReconcileController</p>
- * <p>Description: 余票缓存对账接口（运维用，走网关 http://localhost:8000/business/reconcile/**）。
+ * <p>Description: 余票缓存对账接口（运维用）。
  * 定时任务每小时自动执行，此处提供手动触发入口用于排障/验证。</p>
  * <p>项目名称: TrainTicketing</p>
  *
