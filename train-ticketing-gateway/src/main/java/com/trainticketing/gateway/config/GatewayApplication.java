@@ -11,13 +11,13 @@ import org.springframework.core.env.Environment;
 @ComponentScan("com.trainticketing")
 public class GatewayApplication {
 
-  private static final Logger LOG = LoggerFactory.getLogger(GatewayApplication.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GatewayApplication.class);
 
-  public static void main(String[] args) {
-    SpringApplication app = new SpringApplication(GatewayApplication.class);
-    Environment env = app.run(args).getEnvironment();
-    LOG.info("启动成功！！");
-    LOG.info("网关地址: \thttp://127.0.0.1:{}/hello", env.getProperty("server.port"));
-  }
+    public static void main(String[] args) {
+        SpringApplication app = new SpringApplication(GatewayApplication.class);
+        Environment env = app.run(args).getEnvironment();
+        LOG.info("启动成功！！");
+        LOG.info("网关地址: \thttp://127.0.0.1:{}/hello", env.getProperty("server.port"));
+    }
 
 }

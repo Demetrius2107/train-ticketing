@@ -2,7 +2,9 @@ package com.trainticketing.gateway.filter;
 
 import com.trainticketing.gateway.util.GatewayJwtUtil;
 import io.jsonwebtoken.Claims;
+
 import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -24,16 +26,18 @@ import reactor.core.publisher.Mono;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-17
  * @updateTime 2026-08-17
+ * @since 1.0
  */
 @Component
 public class AuthFilter implements GlobalFilter, Ordered {
 
     private static final Logger LOG = LoggerFactory.getLogger(AuthFilter.class);
 
-    /** 注入下游的会员ID header，business 侧从该 header 取 memberId */
+    /**
+     * 注入下游的会员ID header，business 侧从该 header 取 memberId
+     */
     public static final String MEMBER_ID_HEADER = "X-Member-Id";
 
     private static final String AUTH_HEADER = "Authorization";
@@ -41,21 +45,23 @@ public class AuthFilter implements GlobalFilter, Ordered {
 
     private final AntPathMatcher matcher = new AntPathMatcher();
 
-    /** 白名单：公开接口放行（登录/注册/验证码、查询类、运维对账） */
+    /**
+     * 白名单：公开接口放行（登录/注册/验证码、查询类、运维对账）
+     */
     private static final List<String> WHITELIST = List.of(
-        // member 公开
-        "/member/member/register",
-        "/member/member/send-code",
-        "/member/member/login",
-        "/member/member/count",
-        "/member/hello",
-        // business 查询类公开
-        "/business/ticket/**",
-        "/business/station/**",
-        "/business/train/**",
-        "/business/daily-train/**",
-        "/business/reconcile/**",
-        "/business/hello"
+            // member 公开
+            "/member/member/register",
+            "/member/member/send-code",
+            "/member/member/login",
+            "/member/member/count",
+            "/member/hello",
+            // business 查询类公开
+            "/business/ticket/**",
+            "/business/station/**",
+            "/business/train/**",
+            "/business/daily-train/**",
+            "/business/reconcile/**",
+            "/business/hello"
     );
 
     private final GatewayJwtUtil jwtUtil;
@@ -87,8 +93,8 @@ public class AuthFilter implements GlobalFilter, Ordered {
             Long memberId = extractMemberId(claims);
             // 注入 memberId 到下游 header，business 侧从 X-Member-Id 取
             ServerHttpRequest mutated = request.mutate()
-                .header(MEMBER_ID_HEADER, String.valueOf(memberId))
-                .build();
+                    .header(MEMBER_ID_HEADER, String.valueOf(memberId))
+                    .build();
             return chain.filter(exchange.mutate().request(mutated).build());
         } catch (Exception e) {
             LOG.warn("鉴权失败：token 无效, path={}, error={}", path, e.getMessage());

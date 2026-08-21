@@ -5,8 +5,10 @@ import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+
 import java.nio.charset.StandardCharsets;
 import javax.crypto.SecretKey;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -18,9 +20,9 @@ import org.springframework.stereotype.Component;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-17
  * @updateTime 2026-08-17
+ * @since 1.0
  */
 @Component
 public class GatewayJwtUtil {
@@ -45,9 +47,9 @@ public class GatewayJwtUtil {
      */
     public Claims parse(String token) {
         Jws<Claims> jws = Jwts.parser()
-            .verifyWith(key)
-            .build()
-            .parseSignedClaims(token);
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token);
         return jws.getPayload();
     }
 
