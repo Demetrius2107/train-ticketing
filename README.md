@@ -44,9 +44,15 @@
    # 网关（8000）
    mvn spring-boot:run -pl train-ticketing-gateway
    ```
-5. 启动前端：
+5. 启动前端（npm 或 yarn 均可，也可直接运行一键脚本）：
    ```bash
-   cd web && yarn && yarn serve
+   cd web
+   # 方式一：npm
+   npm install && npm run dev
+   # 方式二：yarn
+   yarn && yarn serve
+   # 方式三：一键脚本（Windows 双击 web/dev.bat；Git Bash 执行 web/dev.sh）
+   ./dev.sh
    ```
 6. 验证：`curl http://localhost:8000/member/member/count`
 
