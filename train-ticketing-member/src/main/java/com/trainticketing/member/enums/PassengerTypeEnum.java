@@ -6,20 +6,28 @@ package com.trainticketing.member.enums;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public enum PassengerTypeEnum {
 
-    /** 成人 */
+    /**
+     * 成人
+     */
     ADULT("1"),
-    /** 儿童 */
+    /**
+     * 儿童
+     */
     CHILD("2"),
-    /** 学生 */
+    /**
+     * 学生
+     */
     STUDENT("3");
 
-    /** 类型编码 */
+    /**
+     * 类型编码
+     */
     private final String code;
 
     PassengerTypeEnum(String code) {

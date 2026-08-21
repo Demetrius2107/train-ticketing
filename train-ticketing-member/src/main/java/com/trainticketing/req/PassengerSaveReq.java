@@ -9,25 +9,33 @@ import jakarta.validation.constraints.NotNull;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class PassengerSaveReq {
 
-    /** 会员id */
+    /**
+     * 会员id
+     */
     @NotNull(message = "[会员id]不能为空")
     private Long memberId;
 
-    /** 姓名 */
+    /**
+     * 姓名
+     */
     @NotBlank(message = "[姓名]不能为空")
     private String name;
 
-    /** 身份证号 */
+    /**
+     * 身份证号
+     */
     @NotBlank(message = "[身份证号]不能为空")
     private String idCard;
 
-    /** 旅客类型|枚举[PassengerTypeEnum]: 1成人 2儿童 3学生 */
+    /**
+     * 旅客类型|枚举[PassengerTypeEnum]: 1成人 2儿童 3学生
+     */
     @NotBlank(message = "[旅客类型]不能为空")
     private String type;
 
@@ -66,10 +74,10 @@ public class PassengerSaveReq {
     @Override
     public String toString() {
         return "PassengerSaveReq{" +
-            "memberId=" + memberId +
-            ", name='" + name + '\'' +
-            ", idCard='" + idCard + '\'' +
-            ", type='" + type + '\'' +
-            '}';
+                "memberId=" + memberId +
+                ", name='" + name + '\'' +
+                ", idCard='" + idCard + '\'' +
+                ", type='" + type + '\'' +
+                '}';
     }
 }

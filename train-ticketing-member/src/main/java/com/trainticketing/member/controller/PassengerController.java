@@ -6,7 +6,9 @@ import com.trainticketing.member.service.PassengerService;
 import com.trainticketing.req.PassengerSaveReq;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+
 import java.util.List;
+
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,13 +19,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * <p>Title: PassengerController</p>
- * <p>Description: 乘车人接口（用户侧，走网关 http://localhost:8000/member/passenger/**）</p>
+ * <p>Description: 乘车人接口 用户侧</p>
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 @RestController
 @RequestMapping("/passenger")

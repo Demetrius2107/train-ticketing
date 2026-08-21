@@ -8,31 +8,45 @@ import java.util.Date;
  * <p>项目名称: TrainTicketing</p>
  *
  * @author wanqiu
- * @since 1.0
  * @createTime 2026-08-16
  * @updateTime 2026-08-16
+ * @since 1.0
  */
 public class Passenger {
 
-    /** 主键ID */
+    /**
+     * 主键ID
+     */
     private Long id;
 
-    /** 会员id */
+    /**
+     * 会员id
+     */
     private Long memberId;
 
-    /** 姓名 */
+    /**
+     * 姓名
+     */
     private String name;
 
-    /** 身份证号 */
+    /**
+     * 身份证号
+     */
     private String idCard;
 
-    /** 旅客类型|枚举[PassengerTypeEnum]: 1成人 2儿童 3学生 */
+    /**
+     * 旅客类型|枚举[PassengerTypeEnum]: 1成人 2儿童 3学生
+     */
     private String type;
 
-    /** 新增时间 */
+    /**
+     * 新增时间
+     */
     private Date createTime;
 
-    /** 修改时间 */
+    /**
+     * 修改时间
+     */
     private Date updateTime;
 
     public Long getId() {
@@ -94,13 +108,13 @@ public class Passenger {
     @Override
     public String toString() {
         return "Passenger{" +
-            "id=" + id +
-            ", memberId=" + memberId +
-            ", name='" + name + '\'' +
-            ", idCard='" + idCard + '\'' +
-            ", type='" + type + '\'' +
-            ", createTime=" + createTime +
-            ", updateTime=" + updateTime +
-            '}';
+                "id=" + id +
+                ", memberId=" + memberId +
+                ", name='" + name + '\'' +
+                ", idCard='" + idCard + '\'' +
+                ", type='" + type + '\'' +
+                ", createTime=" + createTime +
+                ", updateTime=" + updateTime +
+                '}';
     }
 }

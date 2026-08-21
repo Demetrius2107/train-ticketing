@@ -2,7 +2,9 @@ package com.trainticketing.member.mapper;
 
 import com.trainticketing.member.domain.Member;
 import com.trainticketing.member.domain.MemberExample;
+
 import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
 
 public interface MemberMapper {
