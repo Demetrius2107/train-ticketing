@@ -51,6 +51,10 @@
     </where>
     order by run_date, train_id
   </select>
+  <!-- 删除保护：统计车次已生成排班数 -->
+  <select id="countByTrainId" resultType="int">
+    select count(1) from daily_train where train_id = #{trainId,jdbcType=BIGINT}
+  </select>
   <select id="selectByStationsAndDate" resultMap="BaseResultMap">
     select dt.id, dt.train_id, dt.run_date, dt.start_station_id, dt.end_station_id,
     dt.start_time, dt.end_time, dt.status, dt.create_time, dt.update_time

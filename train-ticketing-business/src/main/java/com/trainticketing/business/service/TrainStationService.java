@@ -7,6 +7,7 @@ import cn.hutool.core.util.ObjectUtil;
 import com.trainticketing.business.domain.Station;
 import com.trainticketing.business.domain.Train;
 import com.trainticketing.business.domain.TrainStation;
+import com.trainticketing.business.mapper.DailyTrainMapper;
 import com.trainticketing.business.mapper.StationMapper;
 import com.trainticketing.business.mapper.TrainMapper;
 import com.trainticketing.business.mapper.TrainStationMapper;
@@ -48,6 +49,9 @@ public class TrainStationService {
 
     @Resource
     private StationMapper stationMapper;
+
+    @Resource
+    private DailyTrainMapper dailyTrainMapper;
 
     /**
      * 新增经停站。业务规则：
@@ -108,11 +112,21 @@ public class TrainStationService {
     }
 
     /**
-     * 按主键删除经停站
+     * 按主键删除经停站。删除保护：经停站所属车次一旦生成排班即禁止删除，
+     * 因为排班的余票区间划分依赖经停站站序，删站会导致历史订单区间索引错位。
      *
      * @param id 经停站ID
      */
     public void delete(Long id) {
+        TrainStation trainStation = trainStationMapper.selectByPrimaryKey(id);
+        if (ObjectUtil.isNull(trainStation)) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_TRAIN_STATION_NOT_EXIST);
+        }
+        // 删除保护：该车次已有排班则禁止删经停站（站序是排班余票区间的锚点）
+        int planCount = dailyTrainMapper.countByTrainId(trainStation.getTrainId());
+        if (planCount > 0) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_DAILY_TRAIN_ALREADY_PLAN_FORBIDDEN_DELETE);
+        }
         trainStationMapper.deleteById(id);
     }
 }

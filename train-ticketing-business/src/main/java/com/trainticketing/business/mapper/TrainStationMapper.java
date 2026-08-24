@@ -25,6 +25,14 @@ public interface TrainStationMapper {
   int insert(TrainStation record);
 
   /**
+   * 按主键查询经停站（删除保护用）
+   *
+   * @param id 经停站ID
+   * @return 经停站，不存在返回 null
+   */
+  TrainStation selectByPrimaryKey(@Param("id") Long id);
+
+  /**
    * 按车次查询经停站列表（按站序排序）
    *
    * @param trainId 车次ID

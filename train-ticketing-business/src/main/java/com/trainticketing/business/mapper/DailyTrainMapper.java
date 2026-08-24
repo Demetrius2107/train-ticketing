@@ -52,6 +52,14 @@ public interface DailyTrainMapper {
   List<DailyTrain> selectList(@Param("trainId") Long trainId, @Param("runDate") LocalDate runDate);
 
   /**
+   * 统计某车次已生成的排班数（删除保护用：经停站/车次被排班引用时禁止删除）
+   *
+   * @param trainId 车次ID
+   * @return 排班数
+   */
+  int countByTrainId(@Param("trainId") Long trainId);
+
+  /**
    * 查询某天运行中、且同时经过出发站与到达站（站序正确）的排班列表（用户侧余票查询用）
    *
    * @param fromStationId 出发站id
