@@ -1,25 +1,29 @@
 ### TrainTicketing 全链路接口脚本（经网关 8000，打真实容器部署）
 ###
-### 使用方法：
+### 使用方法（容器部署，推荐）：
 ###   1. 前置：docker compose up -d（五个容器全部 Up/healthy）
-###   2. 依次点击每个请求左侧的绿色运行按钮，从上往下执行
-###   3. 第 1 步发送验证码后，在终端执行下面命令拿到 6 位验证码，
-###      填到本文件顶部的 @code，再从第 2 步继续：
+###   2. 直接点击文件顶部的"Run all requests"一键整跑——
+###      容器内 member 开启了 member.sms.mock-return-code=true，
+###      send-code 响应会直接带回验证码并由脚本自动接住，无需手动填码
+###
+### 使用方法（本地 mvn 跑服务，验证码只进日志）：
+###   1. 单独运行"1. 发送验证码"，终端执行下面命令取 6 位码：
 ###        docker compose logs member --tail 20 | grep 生成短信验证码
-###   4. 所有 ID 通过响应处理器自动传递（token/stationAId/orderNo...），
-###      车站名/车次编号带时间戳后缀，整文件可重复执行不撞唯一约束
+###   2. 在本文件顶部加一行（替换真实码）：@code = 654321
+###   3. 从"2. 登录"开始依次执行
+###
+### 所有 ID 通过响应处理器自动传递（token/stationAId/orderNo...），
+### 车站名/车次编号带时间戳后缀，整文件可重复执行不撞唯一约束
 ###
 ### 链路覆盖：发码 → 登录(JWT) → 乘车人 → 车站×3 → 车次 → 经停站×3
 ###          → 车厢 → 座位档案 → 票价 → 每日排班 → 当日座位+余票缓存
 ###          → 车次查询 → 区间余票 → 下单 → 订单列表 → 支付 → 详情 → 退票 → 余票回补
 
-@code = 123456
 @mobile = 13912345678
 @runDate = 2026-09-12
 @gateway = http://localhost:8000
 
-### 1. 发送验证码（公开接口；占位短信通道，验证码进日志/库）
-# 运行后在终端执行: docker compose logs member --tail 20 | grep 生成短信验证码
+### 1. 发送验证码（容器模式响应 content 即验证码，本地模式进日志）
 POST {{gateway}}/member/member/send-code
 Content-Type: application/x-www-form-urlencoded
 
@@ -28,15 +32,19 @@ mobile={{mobile}}
 > {%
   client.global.set("sfx", String(Date.now() % 100000));
   client.global.set("trainCode", "T" + (Date.now() % 10000));
+  if (response.body.content) {
+    client.global.set("code", response.body.content);
+  }
 %}
 
-### 2. 登录（先把顶部 @code 换成上一步日志里的验证码）
+### 2. 登录（容器模式验证码已自动接住；本地模式需在文件顶部加 @code = 真实码）
 POST {{gateway}}/member/member/login
 Content-Type: application/x-www-form-urlencoded
 
 mobile={{mobile}}&code={{code}}
 
 > {%
+  client.assert(response.body.success, "登录失败：验证码错误或已过期（5 分钟有效），重跑第 1 步再试");
   client.global.set("token", response.body.content.token);
   client.global.set("memberId", response.body.content.id);
 %}

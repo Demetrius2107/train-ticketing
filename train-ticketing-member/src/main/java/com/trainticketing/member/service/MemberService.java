@@ -25,6 +25,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -41,6 +42,14 @@ public class MemberService {
 
     @Resource
     private JwtUtil jwtUtil;
+
+    /**
+     * 短信通道为占位实现时，是否把验证码直接返回给调用方。
+     * 仅限本地/容器开发环境开启（application-docker.properties 已开），
+     * 方便联调脚本一键拿码；生产环境严禁开启。
+     */
+    @Value("${member.sms.mock-return-code:false}")
+    private boolean mockReturnCode;
 
     public int count() {
         return Math.toIntExact(memberMapper.countByExample(null));
@@ -59,7 +68,7 @@ public class MemberService {
         return member.getId();
     }
 
-    public void sendCode(MemberSendCodeReq req) {
+    public String sendCode(MemberSendCodeReq req) {
         String mobile = req.getMobile();
         Member memberDB = selectByMobile(mobile);
         //如果手机号不存在，则插入一条记录
@@ -84,6 +93,8 @@ public class MemberService {
         LOG.info("生成短信验证码:{}", code);
         //对接短信通道，发送短信（开发环境占位）
         LOG.info("对接短信通道");
+        // 占位通道直返验证码，联调脚本免查日志；未开启时返回 null（验证码仍走日志/短信表）
+        return mockReturnCode ? code : null;
     }
 
 

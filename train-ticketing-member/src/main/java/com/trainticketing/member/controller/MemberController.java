@@ -36,9 +36,9 @@ public class MemberController {
 
 
     @PostMapping("/send-code")
-    public CommonResp<Long> sendCode(@Valid MemberSendCodeReq req) {
-        memberService.sendCode(req);
-        return new CommonResp<>();
+    public CommonResp<String> sendCode(@Valid MemberSendCodeReq req) {
+        // content 为验证码（占位通道开发模式直返，见 member.sms.mock-return-code）；生产为 null
+        return new CommonResp<>(memberService.sendCode(req));
     }
 
     @PostMapping("/login")
