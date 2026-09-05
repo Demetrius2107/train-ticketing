@@ -9,15 +9,15 @@
 
 Roadmap（详见 README）：
 - 阶段 0 工程地基（统一异常/返回/日志、会员注册登录）— ✅ 基础完成（短信通道为占位实现）
-- 阶段 1 单体核心域：车站/车次/车厢/座位/每日排班/区间占用余票/订单 — ⬜ 当前阶段
-- 阶段 2 高并发三板斧：Redis 余票缓存 + Lua 预扣、Redisson 分布式锁、MQ 削峰 + 延时关单 — ⬜
+- 阶段 1 单体核心域：车站/车次/车厢/座位/每日排班/区间占用余票/订单 — ✅ 已完成
+- 阶段 2 高并发三板斧：Redis 余票缓存 + Lua 预扣、Redisson 分布式锁、MQ 削峰 + 延时关单 — 🔶 当前阶段（缓存/锁/对账/幂等/JWT/退票/CAS 已落地，缺 MQ 延时关单）
 - 阶段 3 微服务化 + 分库分表 — ⬜
 
 ## 2. 技术栈（版本已在根 pom.xml 验证，勿随意降级/改动）
 
 - JDK 21（本机 `D:\jdk21`；构建用系统 Maven 3.9.12，mvnw 仅作兜底）
 - Spring Boot **3.3.13** / Spring Cloud **2023.0.3**（JDK 21 需要 Boot ≥ 3.2）
-- Spring Cloud Gateway、MyBatis（Generator 生成）、MySQL 8、Vue 3 + Ant Design Vue
+- Spring Cloud Gateway、MyBatis、MySQL 8、Redis + Redisson、Vue 3 + Ant Design Vue
 
 ## 3. 模块与命名约定
 
@@ -25,20 +25,20 @@ Roadmap（详见 README）：
 |---|---|---|---|
 | common | `train-ticketing-common` | - | 统一返回/异常处理/日志 AOP |
 | member | `train-ticketing-member` | 8001 | 会员：注册/验证码/登录/乘车人（context-path `/member`） |
-| gateway | `train-ticketing-gateway` | 8000 | 网关路由 `/member/**` |
-| generator | `train-ticketing-generator` | - | MyBatis Generator |
+| business | `train-ticketing-business` | 8002 | 核心业务域：车次/座位/排班/余票/订单（context-path `/business`） |
+| gateway | `train-ticketing-gateway` | 8000 | 网关路由 `/member/**`、`/business/**` + JWT 校验 |
 | web | （Vue 工程） | 9000 | 前端 |
 
 - Java 包根：**`com.trainticketing`**（如 `com.trainticketing.member.service`），新增代码一律用此包根
 - 新模块 artifactId 一律 `train-ticketing-<模块名>`，并在根 pom `<modules>` 注册
-- 类分层：`Controller → Service → Mapper`；`domain/mapper` 由 Generator 生成，**勿手改生成文件**
+- 类分层：`Controller → Service → Mapper`；domain/mapper 参照现有模块手写（generator 模块已删除）
 
 ## 4. 数据库规范
 
 - 库名 `train_ticketing`；DDL 唯一入口：**`script/sql/train-ticketing.sql`**（新增表先追加 DDL 再动代码）
 - 字段约定：雪花 bigint 主键、`create_time/update_time datetime(3)`、InnoDB + utf8mb4、枚举 `char(1)` 且注释注明枚举类名
 - **核心模型：余票 = 区间占用**。一张 A→C 的票同时占用 A-B、B-C 区间，某区间余票 = 该区间未售座位数；`train_order_item.depart_index/arrive_index` 记录占用区间。不是"总数减已售"！
-- 需要新表代码时：改 `train-ticketing-generator/src/main/resources/generator-config-member.xml` 的 `<table>`，运行 generator 生成
+- 需要新表代码时：先在 DDL 追加表，再参照 business 模块现有 domain/mapper 手写（generator 模块已移除）
 
 ## 5. 编码规范
 

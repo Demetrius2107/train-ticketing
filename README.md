@@ -11,38 +11,47 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 阶段 0 | 工程地基：统一异常/返回/日志 AOP、会员注册/登录闭环 | ✅ 基础完成（短信通道为占位实现） |
-| 阶段 1 | 单体核心域：车站/车次/车厢/座位/每日排班/**区间占用余票模型**/订单 | ⬜ 待开始 |
-| 阶段 2 | 高并发三板斧：Redis 余票缓存 + Lua 预扣、Redisson 细粒度分布式锁、MQ 削峰 + 延时关单 | ⬜ 待开始 |
+| 阶段 1 | 单体核心域：车站/车次/车厢/座位/每日排班/**区间占用余票模型**/订单 | ✅ 已完成（含贪心选座 + 卧铺铺位） |
+| 阶段 2 | 高并发三板斧：Redis 余票缓存 + Lua 预扣、Redisson 细粒度分布式锁、MQ 削峰 + 延时关单 | 🔶 进行中（缓存/锁/对账/JWT/幂等/退票/CAS 已落地，缺 MQ 延时关单） |
 | 阶段 3 | 微服务化：user/ticket/order/pay 服务拆分 + Nacos + Sentinel + 分库分表 | ⬜ 待开始 |
 
 ##  技术栈
 
 - JDK 21 / Spring Boot 3.3 / Spring Cloud 2023.0.x
-- Spring Cloud Gateway（网关）
+- Spring Cloud Gateway（网关，JWT 校验）
 - MyBatis + MySQL 8（InnoDB / utf8mb4 / 雪花 ID）
+- Redis 7 + Redisson（余票缓存 / Lua 预扣 / 分布式锁）
 - Vue 3 + Ant Design Vue（前端）
-- 规划中：Redis / RocketMQ / ShardingSphere / Nacos / Sentinel
+- 规划中：RocketMQ / ShardingSphere / Nacos / Sentinel
 
 ## 模块结构
 
 | 模块 | 端口 | 说明 |
 |---|---|---|
-| train-ticketing-gateway | 8000 | 网关：路由转发（规划限流/鉴权） |
+| train-ticketing-gateway | 8000 | 网关：路由转发 + JWT 校验（规划限流） |
 | train-ticketing-member | 8001 | 会员服务：注册/短信验证码/登录/乘车人 |
+| train-ticketing-business | 8002 | 业务服务：车次/座位/排班/余票/订单核心域 |
 | train-ticketing-common | - | 公共模块：统一返回、异常处理、日志 AOP |
 | web | 9000 | 前端（Vue 3 + Ant Design Vue） |
 
 ## 快速开始
 
-1. 依赖：JDK 21、Maven 3.9+、MySQL 8（前端需要 Node 16+）。
+1. 依赖：JDK 21、Maven 3.9+、MySQL 8、Redis 7（前端需要 Node 16+；或直接用 Docker）。
 2. 初始化数据库：执行 `script/sql/train-ticketing.sql`，自动建库 `train_ticketing` 并创建全部表。
-3. 修改 `train-ticketing-member/src/main/resources/application.properties` 中的数据库账号密码。
-4. 启动后端：
+3. 修改 `train-ticketing-member` / `train-ticketing-business` 的 `application.properties` 中数据库、Redis 账号密码。
+4. 启动后端（方式一：本地 Maven）：
    ```bash
+   # 业务服务（8002，依赖 MySQL + Redis）
+   mvn spring-boot:run -pl train-ticketing-business
    # 会员服务（8001）
    mvn spring-boot:run -pl train-ticketing-member
    # 网关（8000）
    mvn spring-boot:run -pl train-ticketing-gateway
+   ```
+   启动后端（方式二：Docker Compose，中间件 + 后端三服务一键起，账号密码默认对齐无需改配置）：
+   ```bash
+   mvn -DskipTests package       # 先打包各模块 jar
+   docker compose up -d --build  # MySQL(3306)/Redis(6379)/gateway(8000)/member(8001)/business(8002)
    ```
 5. 启动前端（npm 或 yarn 均可，也可直接运行一键脚本）：
    ```bash
@@ -57,6 +66,17 @@
 6. 验证：`curl http://localhost:8000/member/member/count`
 
 接口调试文件见 `http/member-member.http`（IDEA HTTP Client 直接运行）。
+
+## 高并发验证
+
+下单链路（Redis Lua 多段预扣 → Redisson 分布式锁 → DB 行锁三道防线）的并发正确性测试：
+
+```bash
+docker compose up -d mysql redis   # 只起中间件即可，测试直调 Service 层
+mvn test -pl train-ticketing-business -Dtest=OrderConcurrencyTest
+```
+
+三个用例：单线程冒烟 → 100 并发抢 10 票（成票数必须精确等于库存）→ A-C/A-B/B-C 跨区间并发（相邻段占用不超库存、缓存与 DB 终态一致）。注意对账定时任务每小时整点运行，测试尽量避开整点。
 
 ## 分支规范
 
