@@ -1,7 +1,15 @@
-# TrainTicketing 本地中间件：MySQL 8 + Redis 7
-# 账号密码与 train-ticketing-business/src/main/resources/application.properties 对齐
-# 启动：docker compose up -d
+# TrainTicketing 本地环境：MySQL 8 + Redis 7 + 后端三服务（gateway/member/business）
+# 账号密码与各模块 application.properties 对齐
+#
+# 只跑集成/并发测试（如 OrderConcurrencyTest）：仅需 mysql + redis
+#   docker compose up -d mysql redis
+#
+# 起全套后端（网关 8000 / 会员 8001 / 业务 8002）：
+#   1) mvn -DskipTests package        # 先打包出各模块 target/*.jar（gateway 依赖 common，根目录整包）
+#   2) docker compose up -d --build
+#
 # 首次启动 MySQL 会自动执行 script/sql/train-ticketing.sql 建库建表（仅空数据卷时执行一次）
+# 前端 web 暂未容器化：仍为脚手架，本地 cd web && npm run dev（9000）
 services:
   mysql:
     image: mysql:8.0
@@ -36,6 +44,55 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+
+  member:
+    build: ./train-ticketing-member
+    container_name: tt-member
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_DATASOURCE_URL: jdbc:mysql://tt-mysql:3306/train_ticketing?characterEncoding=UTF8&autoReconnect=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: "123456"
+    ports:
+      - "8001:8001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  business:
+    build: ./train-ticketing-business
+    container_name: tt-business
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_DATASOURCE_URL: jdbc:mysql://tt-mysql:3306/train_ticketing?characterEncoding=UTF8&autoReconnect=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_DATA_REDIS_HOST: tt-redis
+      SPRING_DATA_REDIS_PORT: "6379"
+    ports:
+      - "8002:8002"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  gateway:
+    build: ./train-ticketing-gateway
+    container_name: tt-gateway
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      # 容器网络内经服务名路由，覆盖 application.properties 里的 127.0.0.1
+      SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://tt-member:8001
+      SPRING_CLOUD_GATEWAY_ROUTES_1_URI: http://tt-business:8002
+    ports:
+      - "8000:8000"
+    depends_on:
+      - member
+      - business
 
 volumes:
   tt-mysql-data:
