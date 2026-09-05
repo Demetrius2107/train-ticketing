@@ -20,9 +20,9 @@ import java.util.List;
 public class OrderSaveReq {
 
     /**
-     * 会员id
+     * 会员id（控制器从网关注入的登录态回填，不信任前端传入，故不做入参校验——
+     * @Valid 先于回填执行，加 @NotNull 会把不带 memberId 的合法请求拦死）
      */
-    @NotNull(message = "[会员id]不能为空")
     private Long memberId;
 
     /**
