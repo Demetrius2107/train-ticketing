@@ -111,7 +111,9 @@ Prometheus(9090，抓 cAdvisor + member/business actuator 指标) + Grafana(3000
 ## 文档
 
 - [架构说明](docs/architecture.md)
+- [系统架构图（交互版）](docs/diagrams/architecture.html)（[JSON 源](docs/diagrams/architecture.json)，浏览器直接打开）
 - [数据库设计](docs/database.md)
+- [压测报告 2026-09](docs/load-test-report-2026-09.md)
 - [开发规范](AGENTS.md)
 
 ## License

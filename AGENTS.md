@@ -68,4 +68,14 @@ mvn -q -DskipTests compile
 - `README.md` — 总览 / 快速开始 / Roadmap / 分支规范
 - `docs/architecture.md` — 架构与请求链路
 - `docs/database.md` — 表设计与余票模型详解
+- `docs/load-test-report-2026-09.md` — 压测报告 / 问题修复沉淀 / 容量画像
+- `docs/diagrams/` — 架构图（archify 生成的 JSON 源 + 交互 HTML，改 JSON 后重渲染）
 - `script/sql/train-ticketing.sql` — 全量 DDL
+
+## 9. 本地工具（`.zcode/` 已 gitignore，不入库）
+
+- 本地 skill 放 `.zcode/skills/`（如 **archify** 架构图生成，来源 github.com/tt-a1i/archify，MIT）。
+  绘图/更新 `docs/diagrams/` 下的图时：读其 `SKILL.md` → 按 schema 生成 JSON → `node bin/archify.mjs validate` → `deliver`。
+- 重新克隆恢复 archify：
+  `git clone --depth 1 https://github.com/tt-a1i/archify /tmp/archify-repo && mkdir -p .zcode/skills && cp -r /tmp/archify-repo/archify .zcode/skills/`
+- 原则：第三方体积大的工具类 skill 一律本地化不入库；`docs/diagrams/` 的产物（JSON + HTML）入库。
