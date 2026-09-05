@@ -38,3 +38,4 @@ build/
 
 ### AtomCode 本地配置（不提交） ###
 .atomcode/
+log/

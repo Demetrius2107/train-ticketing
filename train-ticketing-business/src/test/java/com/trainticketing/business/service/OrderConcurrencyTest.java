@@ -1,5 +1,6 @@
 package com.trainticketing.business.service;
 
+import com.trainticketing.business.config.BusinessApplication;
 import com.trainticketing.business.req.DailyTrainSaveReq;
 import com.trainticketing.business.req.OrderSaveReq;
 import com.trainticketing.business.req.StationSaveReq;
@@ -46,7 +47,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @createTime 2026-09-01
  * @since 1.0
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        classes = BusinessApplication.class)
 @DisplayName("下单并发正确性")
 class OrderConcurrencyTest {
 
@@ -176,7 +178,9 @@ class OrderConcurrencyTest {
 
         assertEquals(1, countOrders());
         assertEquals(1, countOrderItems());
-        assertEquals(1, countSoldSeats());
+        // sale_status 目前是虚设字段（issue 清单 #5）：占用关系完全由 train_order_item 记录，
+        // 座位不能整体置"已售"——否则非重叠区间无法复用同一座位
+        assertEquals(0, countSoldSeats());
     }
 
     @Test
@@ -199,7 +203,8 @@ class OrderConcurrencyTest {
         assertEquals(0, ticketCacheService.getRemaining(dailyTrainId, SEAT_TYPE, 1, 3));
         assertEquals(STOCK, countOrders());
         assertEquals(STOCK, countOrderItems());
-        assertEquals(STOCK, countSoldSeats());
+        // sale_status 虚设（见冒烟用例注释），占用由 train_order_item 表达
+        assertEquals(0, countSoldSeats());
     }
 
     @Test
@@ -232,7 +237,9 @@ class OrderConcurrencyTest {
         // 缓存终态 = 库存 - 段占用（缓存与成票结果严格一致）
         assertEquals((int) (STOCK - sAB - sAC), ticketCacheService.getRemaining(dailyTrainId, SEAT_TYPE, 1, 2));
         assertEquals((int) (STOCK - sBC - sAC), ticketCacheService.getRemaining(dailyTrainId, SEAT_TYPE, 2, 3));
-        assertEquals((int) (STOCK - sAC), ticketCacheService.getRemaining(dailyTrainId, SEAT_TYPE, 1, 3));
+        // 整区间余票 = 路径上相邻子段余票的最小值（A-B 售罄则 A-C 也不可售）
+        assertEquals((int) Math.min(STOCK - sAB - sAC, STOCK - sBC - sAC),
+                ticketCacheService.getRemaining(dailyTrainId, SEAT_TYPE, 1, 3));
 
         // DB 终态与成票数一致；同一座位可被不重叠区间复用（如 A-B + B-C），故已售座位数 ≤ 库存
         long total = sAB + sBC + sAC;

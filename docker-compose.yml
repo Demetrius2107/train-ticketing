@@ -51,9 +51,9 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
-      SPRING_DATASOURCE_URL: jdbc:mysql://tt-mysql:3306/train_ticketing?characterEncoding=UTF8&autoReconnect=true&serverTimezone=Asia/Shanghai
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: "123456"
+      # 容器内差异配置（DB/Redis 地址）走各模块 application-docker.properties；
+      # 不用环境变量覆盖：索引属性（如 gateway routes[n].uri）无法局部覆盖，空 password 会触发 Redisson AUTH
+      SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8001:8001"
     depends_on:
@@ -66,11 +66,7 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
-      SPRING_DATASOURCE_URL: jdbc:mysql://tt-mysql:3306/train_ticketing?characterEncoding=UTF8&autoReconnect=true&serverTimezone=Asia/Shanghai
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: "123456"
-      SPRING_DATA_REDIS_HOST: tt-redis
-      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8002:8002"
     depends_on:
@@ -85,9 +81,7 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
-      # 容器网络内经服务名路由，覆盖 application.properties 里的 127.0.0.1
-      SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://tt-member:8001
-      SPRING_CLOUD_GATEWAY_ROUTES_1_URI: http://tt-business:8002
+      SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8000:8000"
     depends_on:
