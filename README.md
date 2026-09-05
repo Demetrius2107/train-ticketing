@@ -71,7 +71,7 @@
 
 ## 高并发验证
 
-下单链路（Redis Lua 多段预扣 → Redisson 分布式锁 → DB 行锁三道防线）的并发正确性测试：
+**Service 层**（Redis Lua 多段预扣 → Redisson 分布式锁 → DB 行锁三道防线的并发正确性）：
 
 ```bash
 docker compose up -d mysql redis   # 只起中间件即可，测试直调 Service 层
@@ -79,6 +79,24 @@ mvn test -pl train-ticketing-business -Dtest=OrderConcurrencyTest
 ```
 
 三个用例：单线程冒烟 → 100 并发抢 10 票（成票数必须精确等于库存）→ A-C/A-B/B-C 跨区间并发（相邻段占用不超库存、缓存与 DB 终态一致）。注意对账定时任务每小时整点运行，测试尽量避开整点。
+
+**HTTP 层压测**（经网关 + JWT 打容器里的真实服务，`script/load/order-load-test.py`）：
+
+```bash
+docker compose up -d               # 需要全套服务在跑
+python script/load/order-load-test.py                     # 默认 50 库存 / 100 并发 / 200 请求
+python script/load/order-load-test.py --stock 20 --concurrency 200 --total 500
+```
+
+脚本自动造车次数据链后并发下单，输出成功/余票不足/锁忙分布、延迟分位（p50/p90/p99）、吞吐，并断言防超卖不变式（成功数 ≤ 库存 且 终态余票 = 库存 − 成功数）。
+
+## 可视化监控
+
+```bash
+docker compose --profile monitoring up -d
+```
+
+Prometheus(9090，抓 cAdvisor + member/business actuator 指标) + Grafana(3000，admin/admin，面板已预置) + cAdvisor(8888)。`TrainTicketing 压测总览` 面板含：服务 CPU/内存、JVM 堆/线程/GC、HikariCP 连接池、HTTP QPS 与 p95/p99 延迟。压测时开着面板即可实时观察。不需要监控时普通 `docker compose up -d` 不会启动这三件套。
 
 ## 分支规范
 
