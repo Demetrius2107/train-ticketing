@@ -16,6 +16,9 @@
         <a-form-item>
           <a-button type="primary" block size="large" html-type="submit" :loading="loading">登录</a-button>
         </a-form-item>
+        <a-form-item>
+          <a-button block @click="quickLogin">开发快捷登录（跳过验证码，容器环境）</a-button>
+        </a-form-item>
       </a-form>
       <a-typography-text type="secondary" style="display: block; text-align: center">
         开发环境（容器部署）：验证码会直接弹出显示，无需查看日志
@@ -70,6 +73,20 @@ async function login() {
     const content = await api.login(loginForm.mobile, loginForm.code)
     store.commit('setLogin', { token: content.token, memberId: content.id, mobile: content.mobile })
     message.success('登录成功')
+    router.push(route.query.redirect || '/')
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 开发快捷登录：member.login.skip-code=true 时后端跳过验证码并自动注册（仅容器开发环境） */
+async function quickLogin() {
+  const mobile = loginForm.mobile || '13900000001'
+  loading.value = true
+  try {
+    const content = await api.login(mobile, '000000')
+    store.commit('setLogin', { token: content.token, memberId: content.id, mobile: content.mobile })
+    message.success('快捷登录成功：' + content.mobile)
     router.push(route.query.redirect || '/')
   } finally {
     loading.value = false

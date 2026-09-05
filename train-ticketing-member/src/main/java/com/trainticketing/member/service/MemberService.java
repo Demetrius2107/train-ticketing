@@ -51,6 +51,14 @@ public class MemberService {
     @Value("${member.sms.mock-return-code:false}")
     private boolean mockReturnCode;
 
+    /**
+     * 开发快捷登录：跳过验证码校验，手机号不存在时自动注册。
+     * 仅限本地/容器开发环境开启（application-docker.properties 已开），
+     * 方便前端联调直接进页面；生产环境严禁开启。
+     */
+    @Value("${member.login.skip-code:false}")
+    private boolean loginSkipCode;
+
     public int count() {
         return Math.toIntExact(memberMapper.countByExample(null));
     }
@@ -104,21 +112,32 @@ public class MemberService {
         Member memberDB = selectByMobile(mobile);
         //如果手机号不存在，则插入一条记录
         if (ObjectUtil.isNull(memberDB)) {
-            throw new BusinessException(BusinessExceptionEnum.MEMBER_MOBILE_NOT_EXIST);
+            if (loginSkipCode) {
+                Member member = new Member();
+                member.setId(IdUtil.getSnowflakeNextId());
+                member.setMobile(mobile);
+                memberMapper.insert(member);
+                memberDB = member;
+            } else {
+                throw new BusinessException(BusinessExceptionEnum.MEMBER_MOBILE_NOT_EXIST);
+            }
         }
 
-        //校验短信验证码：取该手机号最新一条未使用的验证码
-        SmsCode smsCode = smsCodeMapper.selectLatestUnusedByMobile(mobile, "LOGIN");
-        //验证码不存在或不匹配
-        if (ObjectUtil.isNull(smsCode) || !code.equals(smsCode.getCode())) {
-            throw new BusinessException(BusinessExceptionEnum.MEMBER_MOBILE_CODE_ERROR);
+        // 快捷登录模式：跳过验证码校验（开发环境专用，见 member.login.skip-code）
+        if (!loginSkipCode) {
+            //校验短信验证码：取该手机号最新一条未使用的验证码
+            SmsCode smsCode = smsCodeMapper.selectLatestUnusedByMobile(mobile, "LOGIN");
+            //验证码不存在或不匹配
+            if (ObjectUtil.isNull(smsCode) || !code.equals(smsCode.getCode())) {
+                throw new BusinessException(BusinessExceptionEnum.MEMBER_MOBILE_CODE_ERROR);
+            }
+            //验证码已过期
+            if (smsCode.getExpiredAt().before(new Date())) {
+                throw new BusinessException(BusinessExceptionEnum.MEMBER_MOBILE_CODE_EXPIRED);
+            }
+            //验证码校验通过，标记已使用
+            smsCodeMapper.markUsed(smsCode.getId(), new Date());
         }
-        //验证码已过期
-        if (smsCode.getExpiredAt().before(new Date())) {
-            throw new BusinessException(BusinessExceptionEnum.MEMBER_MOBILE_CODE_EXPIRED);
-        }
-        //验证码校验通过，标记已使用
-        smsCodeMapper.markUsed(smsCode.getId(), new Date());
         MemberLoginResp resp = BeanUtil.copyProperties(memberDB, MemberLoginResp.class);
         // 签发 JWT，前端后续请求带 Authorization: Bearer {token}
         resp.setToken(jwtUtil.generate(memberDB.getId(), memberDB.getMobile()));
