@@ -1,0 +1,10 @@
+# Grafana 面板自动装配：从挂载目录加载 JSON 面板
+apiVersion: 1
+providers:
+  - name: trainticket
+    folder: TrainTicketing
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards

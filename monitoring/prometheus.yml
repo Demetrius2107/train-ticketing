@@ -1,0 +1,22 @@
+# TrainTicketing Prometheus 抓取配置（监控数据 5s 一个点，压测观察用）
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # cAdvisor：容器级 CPU/内存/网络/IO
+  - job_name: cadvisor
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # business 应用指标（actuator，context-path /business）
+  - job_name: business
+    metrics_path: /business/actuator/prometheus
+    static_configs:
+      - targets: ['business:8002']
+
+  # member 应用指标（actuator，context-path /member）
+  - job_name: member
+    metrics_path: /member/actuator/prometheus
+    static_configs:
+      - targets: ['member:8001']

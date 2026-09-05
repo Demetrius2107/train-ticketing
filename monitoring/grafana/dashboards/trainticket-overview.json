@@ -1,0 +1,118 @@
+{
+  "title": "TrainTicketing 压测总览",
+  "uid": "trainticket-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "服务 CPU 占比（进程级，%）",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "process_cpu_usage{job=~\"member|business\"} * 100", "legendFormat": "{{job}}" },
+        { "refId": "B", "expr": "system_cpu_usage * 100", "legendFormat": "系统整体" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "服务内存（进程常驻，MB）",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "decmbytes" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "process_resident_memory_bytes{job=~\"member|business\"}", "legendFormat": "{{job}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "business JVM 堆内存（按内存池，MB）",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "decmbytes" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "jvm_memory_used_bytes{job=\"business\",area=\"heap\"}", "legendFormat": "{{id}}" },
+        { "refId": "B", "expr": "jvm_memory_max_bytes{job=\"business\",area=\"heap\",id=\"G1 Old Space\"}", "legendFormat": "Old 上限" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "HTTP QPS（按处理结果）",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (job, outcome) (rate(http_server_requests_seconds_count{job=~\"member|business\"}[15s]))", "legendFormat": "{{job}} {{outcome}}" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP 延迟 p95 / p99（ms）",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_server_requests_seconds_bucket{job=\"business\"}[15s]))) * 1000", "legendFormat": "business p95" },
+        { "refId": "B", "expr": "histogram_quantile(0.99, sum by (job, le) (rate(http_server_requests_seconds_bucket{job=\"business\"}[15s]))) * 1000", "legendFormat": "business p99" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "business HikariCP 连接池",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "fieldConfig": { "defaults": { "min": 0 }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "hikaricp_connections_active{job=\"business\"}", "legendFormat": "active" },
+        { "refId": "B", "expr": "hikaricp_connections_idle{job=\"business\"}", "legendFormat": "idle" },
+        { "refId": "C", "expr": "hikaricp_connections_pending{job=\"business\"}", "legendFormat": "pending(等待)" },
+        { "refId": "D", "expr": "hikaricp_connections_max{job=\"business\"}", "legendFormat": "max" }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "JVM 线程数",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "min": 0 }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "jvm_threads_live_threads{job=~\"member|business\"}", "legendFormat": "{{job}} live" },
+        { "refId": "B", "expr": "jvm_threads_peak_threads{job=~\"member|business\"}", "legendFormat": "{{job}} peak" }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "GC 暂停耗时速率（秒/秒）",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "fieldConfig": { "defaults": { "min": 0 }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (job) (rate(jvm_gc_pause_seconds_sum{job=~\"member|business\"}[1m]))", "legendFormat": "{{job}}" }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "business 打开文件数",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "fieldConfig": { "defaults": { "min": 0 }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "process_files_open_files{job=\"business\"}", "legendFormat": "open" },
+        { "refId": "B", "expr": "process_files_max_files{job=\"business\"}", "legendFormat": "max" }
+      ]
+    }
+  ]
+}

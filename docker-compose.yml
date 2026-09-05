@@ -7,7 +7,11 @@
 #
 # 起全套后端（网关 8000 / 会员 8001 / 业务 8002）：
 #   1) mvn -DskipTests package        # 先打包出各模块 target/*.jar（gateway 依赖 common，根目录整包）
-#   2) docker compose up -d --build
+#   2) docker compose up -d
+#
+# 连监控一起起（Prometheus 9090 / Grafana 3000 admin=admin / cAdvisor 8888）：
+#   docker compose --profile monitoring up -d
+#   应用指标来自 member/business 的 actuator（依赖已加），面板自动预置（monitoring/grafana/）
 #
 # 首次启动 MySQL 会自动执行 script/sql/train-ticketing.sql 建库建表（仅空数据卷时执行一次）
 # 前端 web 暂未容器化：仍为脚手架，本地 cd web && npm run dev（9000）
@@ -89,5 +93,50 @@ services:
       - member
       - business
 
+  # ======== 监控三件套（默认不启动，--profile monitoring 启用）========
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: tt-prometheus
+    profiles: [ "monitoring" ]
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - tt-prometheus-data:/prometheus
+    depends_on:
+      - cadvisor
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: tt-cadvisor
+    profiles: [ "monitoring" ]
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    ports:
+      - "8888:8080"
+
+  grafana:
+    image: grafana/grafana:10.0.3
+    container_name: tt-grafana
+    profiles: [ "monitoring" ]
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - tt-grafana-data:/var/lib/grafana
+
 volumes:
   tt-mysql-data:
+  tt-prometheus-data:
+  tt-grafana-data:
