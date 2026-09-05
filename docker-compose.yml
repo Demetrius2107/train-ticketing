@@ -1,0 +1,41 @@
+# TrainTicketing 本地中间件：MySQL 8 + Redis 7
+# 账号密码与 train-ticketing-business/src/main/resources/application.properties 对齐
+# 启动：docker compose up -d
+# 首次启动 MySQL 会自动执行 script/sql/train-ticketing.sql 建库建表（仅空数据卷时执行一次）
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tt-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: train_ticketing
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./script/sql/train-ticketing.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - tt-mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p123456"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: tt-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  tt-mysql-data:
