@@ -145,22 +145,31 @@ public class TicketCacheService {
         if (!anyMissing) {
             return min;
         }
-        // 懒加载回填：以 DB 区间余票为准，回填路径上每个缺失的相邻段
-        List<SeatRemainingResp> remaining = dailyTrainSeatMapper.selectRemainingByInterval(
-                dailyTrainId, departIndex, arriveIndex);
-        int dbCount = 0;
-        for (SeatRemainingResp resp : remaining) {
-            if (seatType.equals(resp.getSeatType())) {
-                dbCount = resp.getRemainingCount().intValue();
-                break;
-            }
-        }
-        // DB 返回的是整段可售票数（min 语义），统一回填到路径各相邻段
+        // 懒加载回填：逐段查 DB 该相邻段 [i, i+1] 的可售数并只回填缺失段。
+        // 不能用整区间 [depart, arrive] 的结果统一回填——那是 min 语义，会把
+        // 未售罄段也写成 min 造成少卖；逐段查与对账逻辑一致。
+        int result = Integer.MAX_VALUE;
         for (int seg : segments) {
-            stringRedisTemplate.opsForHash().put(key, remainField(seg), String.valueOf(dbCount));
+            String field = remainField(seg);
+            String cached = (String) stringRedisTemplate.opsForHash().get(key, field);
+            if (cached != null) {
+                result = Math.min(result, Integer.parseInt(cached));
+                continue;
+            }
+            int segCount = 0;
+            List<SeatRemainingResp> remaining = dailyTrainSeatMapper.selectRemainingByInterval(
+                    dailyTrainId, seg, seg + 1);
+            for (SeatRemainingResp resp : remaining) {
+                if (seatType.equals(resp.getSeatType())) {
+                    segCount = resp.getRemainingCount().intValue();
+                    break;
+                }
+            }
+            stringRedisTemplate.opsForHash().put(key, field, String.valueOf(segCount));
+            LOG.info("余票缓存回填 key={}, 段={}, count={}", key, field, segCount);
+            result = Math.min(result, segCount);
         }
-        LOG.info("余票缓存回填 key={}, [{}-{}], count={}", key, departIndex, arriveIndex, dbCount);
-        return dbCount;
+        return result;
     }
 
     /**
