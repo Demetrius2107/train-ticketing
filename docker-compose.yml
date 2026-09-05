@@ -1,5 +1,6 @@
 # TrainTicketing 本地环境：MySQL 8 + Redis 7 + 后端三服务（gateway/member/business）
-# 账号密码与各模块 application.properties 对齐
+# MySQL 宿主机映射独立端口 13306，避免与本机自装 MySQL（3306）互相冲突；
+# 容器网络内部仍是 3306，应用容器走服务名 tt-mysql:3306 不受影响
 #
 # 只跑集成/并发测试（如 OrderConcurrencyTest）：仅需 mysql + redis
 #   docker compose up -d mysql redis
@@ -20,7 +21,7 @@ services:
       MYSQL_DATABASE: train_ticketing
       TZ: Asia/Shanghai
     ports:
-      - "3306:3306"
+      - "13306:3306"
     volumes:
       - ./script/sql/train-ticketing.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - tt-mysql-data:/var/lib/mysql

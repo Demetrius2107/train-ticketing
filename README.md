@@ -51,8 +51,10 @@
    启动后端（方式二：Docker Compose，中间件 + 后端三服务一键起，账号密码默认对齐无需改配置）：
    ```bash
    mvn -DskipTests package       # 先打包各模块 jar
-   docker compose up -d --build  # MySQL(3306)/Redis(6379)/gateway(8000)/member(8001)/business(8002)
+   docker compose up -d --build  # MySQL(宿主机13306)/Redis(6379)/gateway(8000)/member(8001)/business(8002)
    ```
+   > MySQL 容器映射独立宿主机端口 13306（容器内仍 3306），与本机自装 MySQL 的 3306 互不冲突；
+   > `member`/`business` 的 `application.properties` 本地开发连接串已指向 `localhost:13306`。
 5. 启动前端（npm 或 yarn 均可，也可直接运行一键脚本）：
    ```bash
    cd web
