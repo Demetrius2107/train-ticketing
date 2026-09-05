@@ -1,0 +1,201 @@
+### TrainTicketing 全链路接口脚本（经网关 8000，打真实容器部署）
+###
+### 使用方法：
+###   1. 前置：docker compose up -d（五个容器全部 Up/healthy）
+###   2. 依次点击每个请求左侧的绿色运行按钮，从上往下执行
+###   3. 第 1 步发送验证码后，在终端执行下面命令拿到 6 位验证码，
+###      填到本文件顶部的 @code，再从第 2 步继续：
+###        docker compose logs member --tail 20 | grep 生成短信验证码
+###   4. 所有 ID 通过响应处理器自动传递（token/stationAId/orderNo...），
+###      车站名/车次编号带时间戳后缀，整文件可重复执行不撞唯一约束
+###
+### 链路覆盖：发码 → 登录(JWT) → 乘车人 → 车站×3 → 车次 → 经停站×3
+###          → 车厢 → 座位档案 → 票价 → 每日排班 → 当日座位+余票缓存
+###          → 车次查询 → 区间余票 → 下单 → 订单列表 → 支付 → 详情 → 退票 → 余票回补
+
+@code = 123456
+@mobile = 13912345678
+@runDate = 2026-09-12
+@gateway = http://localhost:8000
+
+### 1. 发送验证码（公开接口；占位短信通道，验证码进日志/库）
+# 运行后在终端执行: docker compose logs member --tail 20 | grep 生成短信验证码
+POST {{gateway}}/member/member/send-code
+Content-Type: application/x-www-form-urlencoded
+
+mobile={{mobile}}
+
+> {%
+  client.global.set("sfx", String(Date.now() % 100000));
+  client.global.set("trainCode", "T" + (Date.now() % 10000));
+%}
+
+### 2. 登录（先把顶部 @code 换成上一步日志里的验证码）
+POST {{gateway}}/member/member/login
+Content-Type: application/x-www-form-urlencoded
+
+mobile={{mobile}}&code={{code}}
+
+> {%
+  client.global.set("token", response.body.content.token);
+  client.global.set("memberId", response.body.content.id);
+%}
+
+### 3. 新增乘车人（下单乘车人快照来源）
+POST {{gateway}}/member/passenger/save
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"memberId": {{memberId}}, "name": "测试乘客", "idCard": "110101199001019999", "type": "1"}
+
+> {%
+  client.global.set("passengerId", response.body.content);
+%}
+
+### 4. 车站：北京西（始发）
+POST {{gateway}}/business/admin/station/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+name=北京西{{sfx}}&namePinyin=beijingxi&namePy=BJX&city=北京
+
+> {%
+  client.global.set("stationAId", response.body.content);
+%}
+
+### 5. 车站：石家庄（中间站）
+POST {{gateway}}/business/admin/station/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+name=石家庄{{sfx}}&namePinyin=shijiazhuang&namePy=SJZ&city=石家庄
+
+> {%
+  client.global.set("stationBId", response.body.content);
+%}
+
+### 6. 车站：郑州东（终到）
+POST {{gateway}}/business/admin/station/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+name=郑州东{{sfx}}&namePinyin=zhengzhoudong&namePy=ZZD&city=郑州
+
+> {%
+  client.global.set("stationCId", response.body.content);
+%}
+
+### 7. 车次（编号格式：字母+1~4位数字，如 G1234）
+POST {{gateway}}/business/admin/train/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+code={{trainCode}}&type=1&startStationId={{stationAId}}&endStationId={{stationCId}}&startTime=08:00&endTime=09:30
+
+> {%
+  client.global.set("trainId", response.body.content);
+%}
+
+### 8. 经停站：站序1（始发站只有发车时间，不传 arriveTime）
+POST {{gateway}}/business/admin/train-station/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+trainId={{trainId}}&stationId={{stationAId}}&stationIndex=1&leaveTime=08:00
+
+### 9. 经停站：站序2（中间站）
+POST {{gateway}}/business/admin/train-station/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+trainId={{trainId}}&stationId={{stationBId}}&stationIndex=2&arriveTime=08:40&leaveTime=08:42
+
+### 10. 经停站：站序3（终到站只有到达时间，不传 leaveTime）
+POST {{gateway}}/business/admin/train-station/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+trainId={{trainId}}&stationId={{stationCId}}&stationIndex=3&arriveTime=09:30
+
+### 11. 车厢（二等座编码 3，每排 A B C D F，10 座）
+POST {{gateway}}/business/admin/train-carriage/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+trainId={{trainId}}&carriageIndex=1&seatType=3&seatCount=10
+
+> {%
+  client.global.set("carriageId", response.body.content);
+%}
+
+### 12. 生成座位档案（返回生成数量）
+POST {{gateway}}/business/admin/train-seat/generate?carriageId={{carriageId}}
+Authorization: Bearer {{token}}
+
+### 13. 票价（当前为车次+座位类型单一价，区间计价在 Roadmap）
+POST {{gateway}}/business/admin/train-price/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+trainId={{trainId}}&seatType=3&price=100.00
+
+### 14. 每日排班
+POST {{gateway}}/business/admin/daily-train/save
+Authorization: Bearer {{token}}
+Content-Type: application/x-www-form-urlencoded
+
+trainId={{trainId}}&runDate={{runDate}}
+
+> {%
+  client.global.set("dailyTrainId", response.body.content);
+%}
+
+### 15. 生成当日座位 + 初始化 Redis 余票缓存（漏了这步下单必失败）
+POST {{gateway}}/business/admin/daily-train-seat/generate?dailyTrainId={{dailyTrainId}}
+Authorization: Bearer {{token}}
+
+### 16. 按起终站查车次（公开接口）
+GET {{gateway}}/business/ticket/query?fromStationId={{stationAId}}&toStationId={{stationCId}}&runDate={{runDate}}
+
+### 17. 查区间余票（公开接口；此时应为 10）
+GET {{gateway}}/business/ticket/query-remaining?dailyTrainId={{dailyTrainId}}&departStationId={{stationAId}}&arriveStationId={{stationCId}}
+
+### 18. 下单（幂等键每次随机；memberId 由网关注入不信任前端）
+POST {{gateway}}/business/order/save
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "idempotentKey": "{{$uuid}}",
+  "dailyTrainId": {{dailyTrainId}},
+  "departStationId": {{stationAId}},
+  "arriveStationId": {{stationCId}},
+  "runDate": "{{runDate}}",
+  "seatType": "3",
+  "passengers": [
+    {"passengerId": {{passengerId}}, "name": "测试乘客", "idCard": "110101199001019999"}
+  ]
+}
+
+> {%
+  client.global.set("orderNo", response.body.content);
+%}
+
+### 19. 我的订单列表
+GET {{gateway}}/business/order/list
+Authorization: Bearer {{token}}
+
+### 20. 支付（待支付 → 已支付）
+POST {{gateway}}/business/order/pay?orderNo={{orderNo}}
+Authorization: Bearer {{token}}
+
+### 21. 订单详情（含座位/车厢/区间明细）
+GET {{gateway}}/business/order/detail?orderNo={{orderNo}}
+Authorization: Bearer {{token}}
+
+### 22. 退票（已支付订单退票，释放区间占用并回补缓存）
+POST {{gateway}}/business/order/refund?orderNo={{orderNo}}
+Authorization: Bearer {{token}}
+
+### 23. 再查余票（退票释放后应回到 10）
+GET {{gateway}}/business/ticket/query-remaining?dailyTrainId={{dailyTrainId}}&departStationId={{stationAId}}&arriveStationId={{stationCId}}
