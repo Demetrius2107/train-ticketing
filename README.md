@@ -55,14 +55,11 @@
    ```
    > MySQL 容器映射独立宿主机端口 13306（容器内仍 3306），与本机自装 MySQL 的 3306 互不冲突；
    > `member`/`business` 的 `application.properties` 本地开发连接串已指向 `localhost:13306`。
-5. 启动前端（npm 或 yarn 均可，也可直接运行一键脚本）：
+5. 启动前端（统一使用 npm，也可直接运行一键脚本）：
    ```bash
    cd web
-   # 方式一：npm
    npm install && npm run dev
-   # 方式二：yarn
-   yarn && yarn serve
-   # 方式三：一键脚本（Windows 双击 web/dev.bat；Git Bash 执行 web/dev.sh）
+   # 一键脚本（Windows 双击 web/dev.bat；Git Bash 执行 web/dev.sh）
    ./dev.sh
    ```
 6. 验证：`curl http://localhost:8000/member/member/count`

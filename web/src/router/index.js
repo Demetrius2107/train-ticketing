@@ -1,31 +1,37 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import store from '@/store'
 
 const routes = [
   {
     path: '/',
-    name: 'home',
-    component: HomeView
+    name: 'ticket-query',
+    component: () => import('../views/TicketQuery.vue'),
+    meta: { title: '车票查询', auth: true }
   },
   {
-    path: '/about',
-    name: 'about',
-    // route level code-splitting
-    // this generates a separate chunk (about.[hash].js) for this route
-    // which is lazy-loaded when the route is visited.
-    component: () => import(/* webpackChunkName: "about" */ '../views/AboutView.vue')
-
+    path: '/orders',
+    name: 'orders',
+    component: () => import('../views/Orders.vue'),
+    meta: { title: '我的订单', auth: true }
   },
   {
-    path:'/login',
-    name:'login',
-    component: ()=>import('../views/login.vue')
+    path: '/login',
+    name: 'login',
+    component: () => import('../views/login.vue'),
+    meta: { title: '登录' }
   }
 ]
 
 const router = createRouter({
   history: createWebHistory(process.env.BASE_URL),
   routes
+})
+
+// 登录守卫：需要登录态的页面未登录时跳登录页
+router.beforeEach((to) => {
+  if (to.meta.auth && !store.getters.isLogin) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
 })
 
 export default router

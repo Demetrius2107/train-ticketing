@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "TrainTicketing 系统架构（单机 Docker 形态）",
+    "output": "docs/diagrams/architecture.html",
+    "visual_preset": "blueprint",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "web", "type": "external", "label": "Web 前端", "sublabel": "Vue3 · :9000", "pos": [40, 210], "size": [130, 64] },
+    { "id": "gateway", "type": "security", "label": "Gateway 网关", "sublabel": ":8000 · JWT 校验 · 路由", "pos": [240, 210], "size": [160, 64] },
+    { "id": "member", "type": "backend", "label": "Member 服务", "sublabel": ":8001 · 注册/登录/乘车人", "pos": [480, 100], "size": [170, 64] },
+    { "id": "business", "type": "backend", "label": "Business 服务", "sublabel": ":8002 · 车次/余票/订单", "pos": [480, 220], "size": [170, 64] },
+    { "id": "redis", "type": "database", "label": "Redis", "sublabel": "余票缓存 · Lua 预扣 · 分布式锁", "pos": [740, 280], "size": [170, 64] },
+    { "id": "mysql", "type": "database", "label": "MySQL", "sublabel": ":13306 · 13 张表 · 区间占用", "pos": [740, 100], "size": [170, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Docker Compose 单机环境", "wraps": ["gateway", "member", "business", "redis", "mysql"], "pad": 24 }
+  ],
+  "connections": [
+    { "from": "web", "to": "gateway", "label": "HTTP", "variant": "emphasis" },
+    { "from": "gateway", "to": "member", "label": "X-Member-Id 注入" },
+    { "from": "gateway", "to": "business", "label": "HTTP", "labelAt": [440, 268] },
+    { "from": "business", "to": "redis", "label": "Lua 预扣 · 锁 · 读缓存", "variant": "emphasis", "labelAt": [596, 300] },
+    { "from": "business", "to": "mysql", "label": "FOR UPDATE 选座 · 订单落库" },
+    { "from": "member", "to": "mysql", "label": "会员 / 验证码" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "防超卖三道防线（下单）",
+      "items": [
+        "Redisson 分布式锁：粒度 = 车次 × 座位类型",
+        "Redis Lua 多段原子预扣：相邻子段模型，任一段不足整体失败",
+        "DB 兜底：NOT EXISTS 可售判定 + FOR UPDATE 行锁"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "缓存-DB 一致性",
+      "items": [
+        "事务回滚补偿：afterCompletion 回补预扣",
+        "事务提交后回补：取消/退票/超时关单 afterCommit",
+        "每小时整点对账：以 DB 区间占用为准重建缓存"
+      ]
+    }
+  ]
+}
