@@ -16,6 +16,10 @@
   <sql id="Base_Column_List">
     id, daily_train_id, train_seat_id, carriage_id, seat_index, seat_label, seat_type, sale_status, create_time, update_time
   </sql>
+  <!-- 带 s 别名的字段列表：JOIN train_order / train_order_item 的查询必须用它，否则 id 等字段在多表间歧义 -->
+  <sql id="Alias_Column_List">
+    s.id, s.daily_train_id, s.train_seat_id, s.carriage_id, s.seat_index, s.seat_label, s.seat_type, s.sale_status, s.create_time, s.update_time
+  </sql>
   <insert id="insertBatch" parameterType="java.util.List">
     insert into daily_train_seat (id, daily_train_id, train_seat_id, carriage_id, seat_index, seat_label, seat_type, sale_status, create_time, update_time)
     values
@@ -53,7 +57,7 @@
   </select>
   <select id="selectAvailableByInterval" resultMap="BaseResultMap">
     select
-    <include refid="Base_Column_List" />
+    <include refid="Alias_Column_List" />
     from daily_train_seat s
     left join train_order o on o.daily_train_id = s.daily_train_id and o.status = '1'
     left join train_order_item oi on oi.order_id = o.id and oi.daily_train_seat_id = s.id
@@ -70,7 +74,7 @@
   <!-- 下单选座（FOR UPDATE 行锁兜底，须在事务内调用）：语义同 selectAvailableByInterval -->
   <select id="selectAvailableForUpdate" resultMap="BaseResultMap">
     select
-    <include refid="Base_Column_List" />
+    <include refid="Alias_Column_List" />
     from daily_train_seat s
     left join train_order o on o.daily_train_id = s.daily_train_id and o.status = '1'
     left join train_order_item oi on oi.order_id = o.id and oi.daily_train_seat_id = s.id
@@ -88,7 +92,7 @@
   <!-- 选座策略用：全量可售座位加行锁，不限数量，供内存贪心选座 -->
   <select id="selectAllAvailableForUpdate" resultMap="BaseResultMap">
     select
-    <include refid="Base_Column_List" />
+    <include refid="Alias_Column_List" />
     from daily_train_seat s
     left join train_order o on o.daily_train_id = s.daily_train_id and o.status = '1'
     left join train_order_item oi on oi.order_id = o.id and oi.daily_train_seat_id = s.id
