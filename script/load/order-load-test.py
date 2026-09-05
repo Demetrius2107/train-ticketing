@@ -143,6 +143,44 @@ def fire(ctx, total, concurrency):
     return results, time.perf_counter() - t0
 
 
+def fire_sustain(ctx, duration, rate):
+    """持续模式：按固定速率（请求/秒）打 duration 秒，观察 Grafana 资源曲线用。
+    库存需配大（如 --stock 5000），否则很快全被打成余票不足。"""
+    start_gate = Event()
+    start_gate.set()
+    results = []
+    interval = 1.0 / rate
+
+    def one():
+        body = {"idempotentKey": str(uuid.uuid4()), "dailyTrainId": ctx["daily"],
+                "departStationId": ctx["sa"], "arriveStationId": ctx["sc"],
+                "runDate": RUN_DATE, "seatType": "3",
+                "passengers": [{"passengerId": PASSENGER[0], "name": "压测乘客", "idCard": "110101199001019999"}]}
+        t0 = time.perf_counter()
+        ok, d, raw = call("POST", "/business/order/save", jbody=body)
+        ms = (time.perf_counter() - t0) * 1000
+        if ok and d and d.get("success"):
+            results.append((True, ms, None))
+        else:
+            msg = (d.get("message") if d else None) or raw[:80]
+            results.append((False, ms, msg))
+
+    with ThreadPoolExecutor(max_workers=rate * 5) as pool:
+        t0 = time.perf_counter()
+        sent = 0
+        next_tick = t0
+        while (tick_at := next_tick) - t0 < duration:
+            # 每个 interval 提交 1 个请求 → 精确 rate/s；用绝对节拍避免计时漂移
+            if tick_at > time.perf_counter():
+                time.sleep(tick_at - time.perf_counter())
+            pool.submit(one)
+            sent += 1
+            next_tick = tick_at + interval
+        print("[压测] 已按 %d req/s 持续施压 %ds（发出 %d 个请求），等待在途收尾 ..." % (rate, duration, sent))
+        pool.shutdown(wait=True)
+    return results, time.perf_counter() - t0
+
+
 def pct(sorted_vals, p):
     if not sorted_vals:
         return 0.0
@@ -155,9 +193,12 @@ def main():
     ap = argparse.ArgumentParser(description="TrainTicketing HTTP 并发压测（经网关打容器服务）")
     ap.add_argument("--url", default="http://127.0.0.1:8000", help="网关地址")
     ap.add_argument("--mobile", default="13900000001", help="压测账号手机号")
-    ap.add_argument("--stock", type=int, default=50, help="本次车次二等座库存")
-    ap.add_argument("--concurrency", type=int, default=100, help="并发线程数")
-    ap.add_argument("--total", type=int, default=200, help="总请求数")
+    ap.add_argument("--stock", type=int, default=50, help="本次车次二等座库存（burst 模式=库存；sustain 模式请配大，如 5000）")
+    ap.add_argument("--concurrency", type=int, default=100, help="burst 模式并发线程数")
+    ap.add_argument("--total", type=int, default=200, help="burst 模式总请求数")
+    ap.add_argument("--sustain", type=int, default=0, metavar="秒数",
+                    help="持续模式：按 --rate 打 N 秒（观察 Grafana 曲线用），与 --total/--concurrency 互斥")
+    ap.add_argument("--rate", type=int, default=50, metavar="每秒请求数", help="持续模式的施压速率")
     ARGS = ap.parse_args()
     API = ARGS.url
     TOKEN = [None]
@@ -168,10 +209,18 @@ def main():
     globals()["PASSENGER"] = PASSENGER
 
     print("=== TrainTicketing HTTP 并发压测 ===")
-    print("目标: %s  库存: %d  并发: %d  总请求: %d" % (API, ARGS.stock, ARGS.concurrency, ARGS.total))
+    if ARGS.sustain:
+        print("模式: 持续  目标: %s  库存: %d  速率: %d req/s  时长: %ds" % (
+            API, ARGS.stock, ARGS.rate, ARGS.sustain))
+    else:
+        print("模式: 冲击  目标: %s  库存: %d  并发: %d  总请求: %d" % (
+            API, ARGS.stock, ARGS.concurrency, ARGS.total))
     ctx = setup(ARGS.stock)
-    print("\n[压测] 放行 %d 个并发下单请求 ..." % ARGS.total)
-    results, wall = fire(ctx, ARGS.total, ARGS.total and ARGS.concurrency)
+    if ARGS.sustain:
+        results, wall = fire_sustain(ctx, ARGS.sustain, ARGS.rate)
+    else:
+        print("\n[压测] 放行 %d 个并发下单请求 ..." % ARGS.total)
+        results, wall = fire(ctx, ARGS.total, ARGS.total and ARGS.concurrency)
 
     succ = [r for r in results if r[0]]
     fail = [r for r in results if not r[0]]
@@ -188,13 +237,13 @@ def main():
     all_lat = sorted(r[1] for r in results)
     succ_lat = sorted(r[1] for r in succ)
     print("\n----- 结果 -----")
-    print("成功下单  : %d / %d" % (len(succ), ARGS.total))
+    print("成功下单  : %d / %d" % (len(succ), len(results)))
     for k, v in sorted(buckets.items()):
         print("%s: %d" % (k, v))
         if k.startswith("其他"):
             for m in {r[2] for r in fail if r[2] and ("余票" not in r[2] and "忙" not in r[2] and "锁" not in r[2])}:
                 print("    样例: %s" % m[:100])
-    print("耗时      : %.2fs   吞吐: %.1f req/s" % (wall, ARGS.total / wall if wall else 0))
+    print("耗时      : %.2fs   吞吐: %.1f req/s" % (wall, len(results) / wall if wall else 0))
     print("延迟(全部): avg=%.0fms p50=%.0f p90=%.0f p99=%.0f max=%.0f" % (
         statistics.mean(all_lat) if all_lat else 0,
         pct(all_lat, 50), pct(all_lat, 90), pct(all_lat, 99), all_lat[-1] if all_lat else 0))
