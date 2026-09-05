@@ -2,117 +2,320 @@
   "title": "TrainTicketing 压测总览",
   "uid": "trainticket-overview",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "refresh": "5s",
-  "time": { "from": "now-30m", "to": "now" },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
   "panels": [
     {
       "id": 1,
       "title": "服务 CPU 占比（进程级，%）",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prom" },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 }, "overrides": [] },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": []
+      },
       "targets": [
-        { "refId": "A", "expr": "process_cpu_usage{job=~\"member|business\"} * 100", "legendFormat": "{{job}}" },
-        { "refId": "B", "expr": "system_cpu_usage * 100", "legendFormat": "系统整体" }
-      ]
+        {
+          "refId": "A",
+          "expr": "process_cpu_usage{job=~\"member|business\"} * 100",
+          "legendFormat": "{{job}}"
+        },
+        {
+          "refId": "B",
+          "expr": "system_cpu_usage * 100",
+          "legendFormat": "系统整体"
+        }
+      ],
+      "description": "服务进程消耗的 CPU 百分比。怎么读：压测时涨到 200%+（多核）说明吃满约 1.3~2 个核；持续逼近 容器核数×100% = CPU 饱和，是第一个容量天花板信号。空闲时应接近 0~5%。"
     },
     {
       "id": 2,
-      "title": "服务内存（进程常驻，MB）",
+      "title": "服务 JVM 堆内存（MB）",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prom" },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "decmbytes" }, "overrides": [] },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
       "targets": [
-        { "refId": "A", "expr": "process_resident_memory_bytes{job=~\"member|business\"}", "legendFormat": "{{job}}" }
-      ]
+        {
+          "refId": "A",
+          "expr": "sum by (job) (jvm_memory_used_bytes{job=~\"member|business\",area=\"heap\"})",
+          "legendFormat": "{{job}} 堆已用"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (job) (jvm_memory_max_bytes{job=~\"member|business\",area=\"heap\"})",
+          "legendFormat": "{{job}} 堆上限"
+        }
+      ],
+      "description": "JVM 堆内存使用。怎么读：健康形态是『锯齿』——随请求上涨，GC 时骤降；持续单边上涨不回落 = 内存泄漏，需要排查。压测时堆打满上限会触发频繁 Full GC → 延迟飙升。"
     },
     {
       "id": 3,
       "title": "business JVM 堆内存（按内存池，MB）",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prom" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "decmbytes" }, "overrides": [] },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
       "targets": [
-        { "refId": "A", "expr": "jvm_memory_used_bytes{job=\"business\",area=\"heap\"}", "legendFormat": "{{id}}" },
-        { "refId": "B", "expr": "jvm_memory_max_bytes{job=\"business\",area=\"heap\",id=\"G1 Old Space\"}", "legendFormat": "Old 上限" }
-      ]
+        {
+          "refId": "A",
+          "expr": "jvm_memory_used_bytes{job=\"business\",area=\"heap\"}",
+          "legendFormat": "{{id}}"
+        },
+        {
+          "refId": "B",
+          "expr": "jvm_memory_max_bytes{job=\"business\",area=\"heap\",id=\"G1 Old Space\"}",
+          "legendFormat": "Old 上限"
+        }
+      ],
+      "description": "business 的老年代堆占用。怎么读：老年代是长生命周期对象（缓存、连接池），压测中缓慢上涨后稳定属正常；持续上涨且 GC 后不降 = 泄漏或对象存活过久。"
     },
     {
       "id": 4,
       "title": "HTTP QPS（按处理结果）",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prom" },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
       "targets": [
-        { "refId": "A", "expr": "sum by (job, outcome) (rate(http_server_requests_seconds_count{job=~\"member|business\"}[15s]))", "legendFormat": "{{job}} {{outcome}}" }
-      ]
+        {
+          "refId": "A",
+          "expr": "sum by (job, outcome) (rate(http_server_requests_seconds_count{job=~\"member|business\"}[15s]))",
+          "legendFormat": "{{job}} {{outcome}}"
+        }
+      ],
+      "description": "每秒 HTTP 请求数（按成功/失败分组）。怎么读：先看这条确认『压力真打进来了』——曲线高度≈你脚本的速率就是没丢请求；SUCCESS 突然掉下去而总量没变 = 服务端开始拒绝/报错。"
     },
     {
       "id": 5,
       "title": "HTTP 延迟 p95 / p99（ms）",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prom" },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
-      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
       "targets": [
-        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_server_requests_seconds_bucket{job=\"business\"}[15s]))) * 1000", "legendFormat": "business p95" },
-        { "refId": "B", "expr": "histogram_quantile(0.99, sum by (job, le) (rate(http_server_requests_seconds_bucket{job=\"business\"}[15s]))) * 1000", "legendFormat": "business p99" }
-      ]
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_server_requests_seconds_bucket{job=\"business\"}[15s]))) * 1000",
+          "legendFormat": "business p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (job, le) (rate(http_server_requests_seconds_bucket{job=\"business\"}[15s]))) * 1000",
+          "legendFormat": "business p99"
+        }
+      ],
+      "description": "响应时间分位：p95=95% 的请求比这个快，p99=除最慢 1% 外都比它快。怎么读：p50 稳定而 p99 飙升 = 尾部延迟劣化（个别请求被锁/阻塞拖住），比平均值更有诊断价值。单位 ms。"
     },
     {
       "id": 6,
       "title": "business HikariCP 连接池",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prom" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
-      "fieldConfig": { "defaults": { "min": 0 }, "overrides": [] },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
       "targets": [
-        { "refId": "A", "expr": "hikaricp_connections_active{job=\"business\"}", "legendFormat": "active" },
-        { "refId": "B", "expr": "hikaricp_connections_idle{job=\"business\"}", "legendFormat": "idle" },
-        { "refId": "C", "expr": "hikaricp_connections_pending{job=\"business\"}", "legendFormat": "pending(等待)" },
-        { "refId": "D", "expr": "hikaricp_connections_max{job=\"business\"}", "legendFormat": "max" }
-      ]
+        {
+          "refId": "A",
+          "expr": "hikaricp_connections_active{job=\"business\"}",
+          "legendFormat": "active"
+        },
+        {
+          "refId": "B",
+          "expr": "hikaricp_connections_idle{job=\"business\"}",
+          "legendFormat": "idle"
+        },
+        {
+          "refId": "C",
+          "expr": "hikaricp_connections_pending{job=\"business\"}",
+          "legendFormat": "pending(等待)"
+        },
+        {
+          "refId": "D",
+          "expr": "hikaricp_connections_max{job=\"business\"}",
+          "legendFormat": "max"
+        }
+      ],
+      "description": "数据库连接池：active=正在用，idle=空闲备用，pending=排队等连接的线程，max=上限(默认10)。怎么读：pending > 0 是最经典的瓶颈信号——业务线程在等数据库连接；active 常年贴着 max = 连接池太小或 SQL 太慢。"
     },
     {
       "id": 7,
       "title": "JVM 线程数",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prom" },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
-      "fieldConfig": { "defaults": { "min": 0 }, "overrides": [] },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
       "targets": [
-        { "refId": "A", "expr": "jvm_threads_live_threads{job=~\"member|business\"}", "legendFormat": "{{job}} live" },
-        { "refId": "B", "expr": "jvm_threads_peak_threads{job=~\"member|business\"}", "legendFormat": "{{job}} peak" }
-      ]
+        {
+          "refId": "A",
+          "expr": "jvm_threads_live_threads{job=~\"member|business\"}",
+          "legendFormat": "{{job}} live"
+        },
+        {
+          "refId": "B",
+          "expr": "jvm_threads_peak_threads{job=~\"member|business\"}",
+          "legendFormat": "{{job}} peak"
+        }
+      ],
+      "description": "JVM 线程数（live 当前，peak 历史峰值）。怎么读：Tomcat 默认 200 工作线程，压测时 live 冲到 200 后大量请求排队 = 线程饱和；peak 异常高可能是锁等待堆积了大量阻塞线程。"
     },
     {
       "id": 8,
       "title": "GC 暂停耗时速率（秒/秒）",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prom" },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
-      "fieldConfig": { "defaults": { "min": 0 }, "overrides": [] },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
       "targets": [
-        { "refId": "A", "expr": "sum by (job) (rate(jvm_gc_pause_seconds_sum{job=~\"member|business\"}[1m]))", "legendFormat": "{{job}}" }
-      ]
+        {
+          "refId": "A",
+          "expr": "sum by (job) (rate(jvm_gc_pause_seconds_sum{job=~\"member|business\"}[1m]))",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "description": "GC 停顿每秒消耗的时间。怎么读：小抖动正常；持续 >0.1（即每秒 100ms 花在 GC 上）说明 GC 压力大，通常伴随堆打满，是延迟飙升的常见根因。"
     },
     {
       "id": 9,
       "title": "business 打开文件数",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prom" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
-      "fieldConfig": { "defaults": { "min": 0 }, "overrides": [] },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
       "targets": [
-        { "refId": "A", "expr": "process_files_open_files{job=\"business\"}", "legendFormat": "open" },
-        { "refId": "B", "expr": "process_files_max_files{job=\"business\"}", "legendFormat": "max" }
-      ]
+        {
+          "refId": "A",
+          "expr": "process_files_open_files{job=\"business\"}",
+          "legendFormat": "open"
+        },
+        {
+          "refId": "B",
+          "expr": "process_files_max_files{job=\"business\"}",
+          "legendFormat": "max"
+        }
+      ],
+      "description": "进程打开的文件数（每个网络连接/日志句柄占一个）。怎么读：应随连接数波动后回落；只涨不跌 = 连接/流泄漏，最终会撞上 max 报 Too many open files。"
     }
   ]
 }
