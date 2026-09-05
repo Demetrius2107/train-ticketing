@@ -51,10 +51,14 @@ public class TicketService {
     @Resource
     private TrainMapper trainMapper;
 
+    @Resource
+    private TicketCacheService ticketCacheService;
+
     /**
      * 查询指定排班某区间的余票（区间占用模型）。
      * 业务规则：出发/到达站必须是该车次经停站，且出发站序必须小于到达站序；
-     * 余票统计见 DailyTrainSeatMapper.selectRemainingByInterval。
+     * 余票读 Redis 缓存（路径相邻段最小值，缺失段自动回源 DB），与下单预扣共用
+     * 同一数据源，保证查买一致——查询路径不再直接扫座位表，读容量与 MySQL 解耦。
      *
      * @param dailyTrainId    排班ID
      * @param departStationId 出发站id
@@ -72,8 +76,17 @@ public class TicketService {
                 || depart.getStationIndex() >= arrive.getStationIndex()) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
         }
-        return dailyTrainSeatMapper.selectRemainingByInterval(dailyTrainId,
-                depart.getStationIndex(), arrive.getStationIndex());
+        List<String> seatTypes = dailyTrainSeatMapper.selectSeatTypes(dailyTrainId);
+        List<SeatRemainingResp> result = new ArrayList<>(seatTypes.size());
+        for (String seatType : seatTypes) {
+            int remain = ticketCacheService.getRemaining(dailyTrainId, seatType,
+                    depart.getStationIndex(), arrive.getStationIndex());
+            SeatRemainingResp resp = new SeatRemainingResp();
+            resp.setSeatType(seatType);
+            resp.setRemainingCount((long) remain);
+            result.add(resp);
+        }
+        return result;
     }
 
     /**

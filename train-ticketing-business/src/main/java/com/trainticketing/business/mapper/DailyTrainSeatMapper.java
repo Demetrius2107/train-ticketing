@@ -108,4 +108,12 @@ public interface DailyTrainSeatMapper {
                                                    @Param("departIndex") Integer departIndex,
                                                    @Param("arriveIndex") Integer arriveIndex,
                                                    @Param("seatType") String seatType);
+
+  /**
+   * 查询排班下的座位类型列表（去重，余票查询按类型逐个走缓存用）
+   *
+   * @param dailyTrainId 排班ID
+   * @return 座位类型编码列表（升序）
+   */
+  List<String> selectSeatTypes(@Param("dailyTrainId") Long dailyTrainId);
 }

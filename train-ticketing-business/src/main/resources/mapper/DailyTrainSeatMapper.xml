@@ -112,4 +112,11 @@
     order by s.carriage_id, s.seat_index, s.seat_label
     for update
   </select>
+  <!-- 余票查询按类型逐个走缓存，此查询提供该排班的座位类型清单 -->
+  <select id="selectSeatTypes" resultType="java.lang.String">
+    select distinct seat_type
+    from daily_train_seat
+    where daily_train_id = #{dailyTrainId,jdbcType=BIGINT}
+    order by seat_type
+  </select>
 </mapper>
