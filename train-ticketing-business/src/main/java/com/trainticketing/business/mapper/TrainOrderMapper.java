@@ -81,4 +81,13 @@ public interface TrainOrderMapper {
    * @return 超时待支付订单列表
    */
   List<TrainOrder> selectExpiredPending(@Param("now") java.util.Date now);
+
+  /**
+   * 查询出票中且已超过出票窗口的悬挂订单（兜底扫描用）：
+   * 出票消息丢失或重试耗尽进死信后，订单停留出票中状态，由扫描收敛为出票失败
+   *
+   * @param threshold 出票截止时间（expire_time ≤ threshold 视为悬挂）
+   * @return 悬挂出票中订单列表
+   */
+  List<TrainOrder> selectHungQueuing(@Param("threshold") java.util.Date threshold);
 }
