@@ -1,17 +1,20 @@
-# TrainTicketing 本地环境：MySQL 8 + Redis 7 + 后端三服务（gateway/member/business）
+# TrainTicketing 本地环境：MySQL 8 + Redis 7 + RocketMQ 4.9.4 + 后端三服务（gateway/member/business）
 # MySQL 宿主机映射独立端口 13306，避免与本机自装 MySQL（3306）互相冲突；
 # 容器网络内部仍是 3306，应用容器走服务名 tt-mysql:3306 不受影响
 #
 # 只跑集成/并发测试（如 OrderConcurrencyTest）：仅需 mysql + redis
 #   docker compose up -d mysql redis
 #
-# 起全套后端（网关 8000 / 会员 8001 / 业务 8002）：
+# 起全套后端（网关 8000 / 会员 8001 / 业务 8002 / namesrv 9876 / broker 10911）：
 #   1) mvn -DskipTests package        # 先打包出各模块 target/*.jar（gateway 依赖 common，根目录整包）
 #   2) docker compose up -d
 #
-# 连监控一起起（Prometheus 9090 / Grafana 3000 admin=admin / cAdvisor 8888）：
+# 连监控一起起（Prometheus 9090 / Grafana 3000 admin=admin / cAdvisor 8888 / RocketMQ 控制台 18080）：
 #   docker compose --profile monitoring up -d
 #   应用指标来自 member/business 的 actuator（依赖已加），面板自动预置（monitoring/grafana/）
+#
+# RocketMQ 说明：broker 的 brokerIP1 配成 compose 服务名 tt-rocketmq-broker，
+# 容器内客户端经 Docker DNS 解析回连；宿主机进程不直连 broker（宿主调试用 18080 控制台看即可）。
 #
 # 首次启动 MySQL 会自动执行 script/sql/train-ticketing.sql 建库建表（仅空数据卷时执行一次）
 # 前端 web 暂未容器化：仍为脚手架，本地 cd web && npm run dev（9000）
@@ -50,6 +53,43 @@ services:
       timeout: 3s
       retries: 30
 
+  # ======== RocketMQ（阶段2 削峰 + 延时关单）========
+  rocketmq-namesrv:
+    image: apache/rocketmq:4.9.4
+    container_name: tt-rocketmq-namesrv
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      # namesrv 很轻，限制 JVM 防止吃满笔记本内存
+      JAVA_OPT_EXT: "-Xms256m -Xmx256m"
+    command: ["sh", "mqnamesrv"]
+    ports:
+      - "9876:9876"
+    healthcheck:
+      test: ["CMD", "sh", "mqadmin", "clusterList", "-n", "localhost:9876"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  rocketmq-broker:
+    image: apache/rocketmq:4.9.4
+    container_name: tt-rocketmq-broker
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_OPT_EXT: "-Xms512m -Xmx512m -Xmn256m"
+    command: ["sh", "mqbroker", "-c", "/home/rocketmq/broker.conf"]
+    volumes:
+      - ./rocketmq/broker.conf:/home/rocketmq/broker.conf:ro
+    # 注意：不要给 /home/rocketmq/store、/logs 挂具名卷——镜像中不存在该目录时卷会创建成 root 属主，
+    # broker（uid 3000）无写权限直接退出 253（且日志写在 logs 目录，docker logs 也是空的）。
+    # 本地学习环境 broker 数据写入容器层即可（重启丢消息无影响，防超卖正确性不依赖消息持久化）；
+    # 10911/10909/10912 不发布宿主机：客户端全在容器网络内（brokerIP1=服务名回连），
+    # 避免与宿主机端口冲突；宿主侧观察走 monitoring profile 的 RocketMQ 控制台
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_healthy
+
   member:
     build: ./train-ticketing-member
     container_name: tt-member
@@ -78,6 +118,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rocketmq-namesrv:
         condition: service_healthy
 
   gateway:
@@ -135,6 +177,20 @@ services:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - tt-grafana-data:/var/lib/grafana
+
+  # RocketMQ 控制台（观察 topic/堆积/消费进度，宿主 18080）
+  rocketmq-dashboard:
+    image: apacherocketmq/rocketmq-dashboard:1.0.0
+    container_name: tt-rocketmq-dashboard
+    profiles: [ "monitoring" ]
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_OPTS: "-Drocketmq.namesrv.addr=tt-rocketmq-namesrv:9876 -Xms256m -Xmx256m"
+    ports:
+      - "18080:8080"
+    depends_on:
+      - rocketmq-namesrv
 
 volumes:
   tt-mysql-data:
