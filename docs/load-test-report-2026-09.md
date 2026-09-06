@@ -62,6 +62,7 @@ Redis 缓存与 DB 终态永远一致、拒绝永远干净。防超卖命题证�
 | 12 | **100 QPS 查询即全站瘫痪**（p50=30s，/hello 都 13.5s） | train_order_item 无 daily_train_seat_id 索引，每座位 NOT EXISTS 全表扫（单查询千万级行比较）→ 10 连接占死 → Tomcat 200 线程排满 | 加 idx_seat_id，p50 30s→7ms（4000 倍） |
 | 13 | 容器压测 I/O 大头 | mapper TRACE 行级日志（一次下单打 2000 行） | docker profile 降为 info |
 | 14 | 压测脚本持续模式速率=rate² | 每 interval 提交 rate 个请求 | 每 interval 提交 1 个+绝对节拍 |
+| 15 | 查询脚本 200 QPS 档位偶发 `ValueError: sleep length must be non-negative` | 请求耗时超过节拍间隔后 next_tick 落后墙钟，负 sleep 未钳制 | ⬜ 未修复（建议 `time.sleep(max(0, next_tick - ...))`） |
 
 方法论沉淀：**索引是性价比之王**（一行 DDL，读写两条路径同时受益）；
 **LEFT JOIN 判存在不如 NOT EXISTS**（无膨胀、语义准）；**压测必须避开整点**
@@ -80,9 +81,15 @@ Redis 缓存与 DB 终态永远一致、拒绝永远干净。防超卖命题证�
 
 | 场景 | 优化前 | 优化后 |
 |---|---|---|
-| 查询 100 QPS | remaining p50=7ms | 待复测 |
-| 查询 300 QPS | 实际 244 req/s，remaining p50=3025ms，pending 峰值 189 | 待复测 |
-| 下单持续 50rps | 成功 p50≈3.0s（锁排队为主） | 待复测 |
+| 查询 100 QPS | remaining p50=7ms | remaining p50=8ms，list p50=36ms，0 失败满速（该点位本就无压力，持平） |
+| 查询 200 QPS（补充，找新拐点） | 干净容量 ≈100~150 QPS | 实际 199.8 req/s，remaining p50=8ms，list p50=57ms，干净（3 个 500，见下方注） |
+| 查询 300 QPS | 实际 244 req/s，remaining p50=3025ms，pending 峰值 189 | 实际 289.1 req/s，remaining p50=764ms，list p50=2364ms，pending 峰值 180（active 顶满新上限 20） |
+| 下单持续 50rps | 成功 p50≈3.0s（锁排队为主） | 2000 张精确售罄 PASS，成功 p50=2240ms（513 余票不足 + 487 锁忙，分布健康） |
+
+复测结论：① 干净查询容量从 ≈100~150 QPS 抬到 ≈200 QPS；② 300 QPS 仍会饱和（连接池 active 顶满 20、pending ~180），但饱和形态从"全站瘫痪"（p50 3s+/部分接口 13s）变为"优雅降级"（p50 764ms，0 超卖）；③ 下单 p50 3.0s→2.24s，收益来自连接池扩容，锁排队仍是主因——与预期一致，坐实优化项 #4（分段锁）与 MQ 异步化的必要性。
+
+> 注：200 QPS 轮出现 3/12000（0.03%）`query-remaining` HTTP 500，business/gateway 日志均无对应堆栈，疑为 Windows 压测客户端端口瞬时耗尽 / Docker NAT 抖动，不影响结论，后续复测留意。
+> 另：查询脚本在 200 QPS 档位首发时因 pacing 落后墙钟抛 `ValueError: sleep length must be non-negative`（见问题表 #15），重跑通过。
 
 ## 六、复现命令
 
