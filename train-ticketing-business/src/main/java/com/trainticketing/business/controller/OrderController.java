@@ -65,6 +65,21 @@ public class OrderController {
     }
 
     /**
+     * 异步下单（MQ 削峰）：请求只做校验、Lua 预扣与发消息，毫秒级返回排队订单号，
+     * 选座出票由消费者异步完成。订单状态 4出票中 → 0待支付 / 5出票失败，
+     * 前端凭返回的订单号轮询 /order/detail 获取终态。
+     *
+     * @param req     下单请求
+     * @param request HTTP 请求（取登录会员）
+     * @return 排队订单号
+     */
+    @PostMapping("/async")
+    public CommonResp<String> saveAsync(@RequestBody @Valid OrderSaveReq req, HttpServletRequest request) {
+        req.setMemberId(currentMemberId(request));
+        return new CommonResp<>(orderService.saveAsync(req));
+    }
+
+    /**
      * 查询当前登录会员的订单列表（含明细）
      *
      * @param request HTTP 请求（取登录会员）

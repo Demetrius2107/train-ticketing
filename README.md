@@ -12,7 +12,7 @@
 |---|---|---|
 | 阶段 0 | 工程地基：统一异常/返回/日志 AOP、会员注册/登录闭环 | ✅ 基础完成（短信通道为占位实现） |
 | 阶段 1 | 单体核心域：车站/车次/车厢/座位/每日排班/**区间占用余票模型**/订单 | ✅ 已完成（含贪心选座 + 卧铺铺位） |
-| 阶段 2 | 高并发三板斧：Redis 余票缓存 + Lua 预扣、Redisson 细粒度分布式锁、MQ 削峰 + 延时关单 | 🔶 进行中（缓存/锁/对账/JWT/幂等/退票/CAS 已落地，缺 MQ 延时关单） |
+| 阶段 2 | 高并发三板斧：Redis 余票缓存 + Lua 预扣、Redisson 细粒度分布式锁、MQ 削峰 + 延时关单 | ✅ 已完成（缓存/锁/对账/JWT/幂等/退票/CAS/异步下单/延时关单/兜底扫描） |
 | 阶段 3 | 微服务化：user/ticket/order/pay 服务拆分 + Nacos + Sentinel + 分库分表 | ⬜ 待开始 |
 
 ##  技术栈
@@ -21,8 +21,9 @@
 - Spring Cloud Gateway（网关，JWT 校验）
 - MyBatis + MySQL 8（InnoDB / utf8mb4 / 雪花 ID）
 - Redis 7 + Redisson（余票缓存 / Lua 预扣 / 分布式锁）
+- RocketMQ 4.9.4（异步下单削峰 / 延时消息关单 / 兜底扫描）
 - Vue 3 + Ant Design Vue（前端）
-- 规划中：RocketMQ / ShardingSphere / Nacos / Sentinel
+- 规划中：ShardingSphere / Nacos / Sentinel
 
 ## 模块结构
 
@@ -30,7 +31,7 @@
 |---|---|---|
 | train-ticketing-gateway | 8000 | 网关：路由转发 + JWT 校验（规划限流） |
 | train-ticketing-member | 8001 | 会员服务：注册/短信验证码/登录/乘车人 |
-| train-ticketing-business | 8002 | 业务服务：车次/座位/排班/余票/订单核心域 |
+| train-ticketing-business | 8002 | 业务服务：车次/座位/排班/余票/订单核心域（含 MQ 出票消费者） |
 | train-ticketing-common | - | 公共模块：统一返回、异常处理、日志 AOP |
 | web | 9000 | 前端（Vue 3 + Ant Design Vue） |
 
@@ -51,10 +52,11 @@
    启动后端（方式二：Docker Compose，中间件 + 后端三服务一键起，账号密码默认对齐无需改配置）：
    ```bash
    mvn -DskipTests package       # 先打包各模块 jar
-   docker compose up -d --build  # MySQL(宿主机13306)/Redis(6379)/gateway(8000)/member(8001)/business(8002)
+   docker compose up -d --build  # MySQL(宿主机13306)/Redis(6379)/RocketMQ(9876)/gateway(8000)/member(8001)/business(8002)
    ```
    > MySQL 容器映射独立宿主机端口 13306（容器内仍 3306），与本机自装 MySQL 的 3306 互不冲突；
    > `member`/`business` 的 `application.properties` 本地开发连接串已指向 `localhost:13306`。
+   > 首次拉取 RocketMQ 镜像若被墙：`docker pull docker.m.daocloud.io/apache/rocketmq:4.9.4 && docker tag docker.m.daocloud.io/apache/rocketmq:4.9.4 apache/rocketmq:4.9.4`
 5. 启动前端（统一使用 npm，也可直接运行一键脚本）：
    ```bash
    cd web
@@ -81,8 +83,9 @@ mvn test -pl train-ticketing-business -Dtest=OrderConcurrencyTest
 
 ```bash
 docker compose up -d               # 需要全套服务在跑
-python script/load/order-load-test.py                     # 默认 50 库存 / 100 并发 / 200 请求
+python script/load/order-load-test.py                     # 默认 50 库存 / 100 并发 / 200 请求（同步下单）
 python script/load/order-load-test.py --stock 20 --concurrency 200 --total 500
+python script/load/order-load-test.py --async --stock 50 --total 200   # 异步下单（MQ 削峰链路，轮询出票终态后断言）
 ```
 
 脚本自动造车次数据链后并发下单，输出成功/余票不足/锁忙分布、延迟分位（p50/p90/p99）、吞吐，并断言防超卖不变式（成功数 ≤ 库存 且 终态余票 = 库存 − 成功数）。

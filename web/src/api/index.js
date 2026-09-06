@@ -17,6 +17,8 @@ export const api = {
 
   // ===== 订单 =====
   orderSave: (order) => request('POST', '/business/order/save', { json: order }),
+  // 异步下单（MQ 削峰）：毫秒级返回排队订单号，出票由后端异步完成，前端轮询订单状态
+  orderAsyncSave: (order) => request('POST', '/business/order/async', { json: order }),
   orderList: () => request('GET', '/business/order/list'),
   orderDetail: (orderNo) => request('GET', `/business/order/detail?orderNo=${encodeURIComponent(orderNo)}`),
   orderPay: (orderNo) => request('POST', `/business/order/pay?orderNo=${encodeURIComponent(orderNo)}`),

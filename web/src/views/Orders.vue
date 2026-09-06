@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { api } from '@/api'
 
@@ -47,11 +47,19 @@ const STATUS = {
   0: { text: '待支付', color: 'warning' },
   1: { text: '已支付', color: 'processing' },
   2: { text: '已取消', color: 'default' },
-  3: { text: '已退票', color: 'error' }
+  3: { text: '已退票', color: 'error' },
+  4: { text: '出票中', color: 'processing' },
+  5: { text: '出票失败', color: 'error' }
 }
 
 const orders = ref([])
 const loading = ref(false)
+
+// 出票中订单轮询：异步下单（MQ 削峰）后出票需几百毫秒，存在出票中订单时每 3s 刷新，2 分钟上限
+const POLL_INTERVAL = 3000
+const POLL_MAX = 40
+let pollTimer = null
+let pollCount = 0
 
 function seatTypeName(code) {
   return SEAT_NAMES[code] || '座位' + code
@@ -75,6 +83,18 @@ async function load() {
   } finally {
     loading.value = false
   }
+  schedulePollIfQueuing()
+}
+
+function schedulePollIfQueuing() {
+  if (pollTimer) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+  const queuing = orders.value.some(o => o.status === '4')
+  if (!queuing || pollCount >= POLL_MAX) return
+  pollCount++
+  pollTimer = setTimeout(load, POLL_INTERVAL)
 }
 
 const ACT_TEXT = { pay: '支付', cancel: '取消', refund: '退票' }
@@ -96,5 +116,12 @@ function act(order, action) {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  pollCount = 0
+  load()
+})
+
+onUnmounted(() => {
+  if (pollTimer) clearTimeout(pollTimer)
+})
 </script>

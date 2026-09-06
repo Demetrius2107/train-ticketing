@@ -63,6 +63,24 @@ Redis 缓存与 DB 终态永远一致、拒绝永远干净。防超卖命题证�
 | 13 | 容器压测 I/O 大头 | mapper TRACE 行级日志（一次下单打 2000 行） | docker profile 降为 info |
 | 14 | 压测脚本持续模式速率=rate² | 每 interval 提交 rate 个请求 | 每 interval 提交 1 个+绝对节拍 |
 | 15 | 查询脚本 200 QPS 档位偶发 `ValueError: sleep length must be non-negative` | 请求耗时超过节拍间隔后 next_tick 落后墙钟，负 sleep 未钳制 | ⬜ 未修复（建议 `time.sleep(max(0, next_tick - ...))`） |
+| 16 | RocketMQ broker 容器秒退 exit 253，且 docker logs 全空 | 给 `/home/rocketmq/store`、`/logs` 挂具名卷：镜像中不存在该目录 → 卷被创建为 root 属主，broker（uid 3000）无写权限，连日志文件都建不出来 | 删除 store/logs 卷挂载（本地学习环境 broker 数据写入容器层即可，防超卖正确性不依赖消息持久化） |
+| 17 | **取消/退票/延时关单后 Redis 余票永不回补**（发现于延时关单实测：关单成功但余票停 4 不回 5） | `releaseRemainingAfterCommit` 在 `deleteByOrderId` **之后**调用，其内部 `selectByOrderId` 事务内恒查到空列表直接 return——回补从未执行过。历史压测未暴露：防超卖断言只覆盖下单路径，且整点对账按 DB 重建缓存每小时掩盖一次 | 修复调用顺序：三处（cancel/refund/closeOrder）统一改为"先读明细取参数、后删明细"，afterCommit 回调提交后回补；实测取消路径余票 4→5 即时回补 ✅ |
+
+## 七、异步下单压测（MQ 削峰链路，2026-09-06 补充）
+
+RocketMQ 4.9.4 落地后的首轮异步链路验证：`POST /business/order/async`（Lua 预扣+发消息，毫秒级受理）
+→ 消费者（并发 20，Redisson 锁串行化选座）出票 → 前端/脚本轮询终态。
+
+| 场景 | 压力 | 结果 |
+|---|---|---|
+| 下单·冲击·异步 | 200 请求/100 并发抢 50 票 | 受理 50（150 干净拒绝余票不足）；**出票 50 精确=库存 PASS，0 悬挂，0 出票失败** |
+
+- 受理延迟 p50=1234ms（100 并发下主要耗在只读校验抢连接池，与 MQ 无关；成功受理 p50=2530ms 含预插订单行+syncSend）
+- 收敛耗时 12.1s：50 单全部由消费者出票完成 ≈ 4 单/s——瓶颈仍是锁串行化（与同步链路 33 单/秒天花板同源），
+  坐实下一步「按车厢分段锁」的价值；削峰的收益在于洪峰请求不再直打 DB 写路径（选座落库被消费端限速消化）
+- 正确性不变式与同步链路一致：成票数=库存、缓存与 DB 终态一致、无悬挂单（重试耗尽由兜底扫描收敛）
+
+复现：`python script/load/order-load-test.py --async --stock 50 --total 200 --concurrency 100`
 
 方法论沉淀：**索引是性价比之王**（一行 DDL，读写两条路径同时受益）；
 **LEFT JOIN 判存在不如 NOT EXISTS**（无膨胀、语义准）；**压测必须避开整点**

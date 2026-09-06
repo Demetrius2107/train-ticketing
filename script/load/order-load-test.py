@@ -5,6 +5,7 @@ TrainTicketing HTTP 层并发压测：经网关(8000) -> JWT -> business 容器 
 用法（需 docker compose 全套在跑；压的是容器里的真实服务，不是本地 JVM）：
   python script/load/order-load-test.py                          # 默认：50 库存 / 100 并发 / 200 请求
   python script/load/order-load-test.py --stock 20 --concurrency 200 --total 500
+  python script/load/order-load-test.py --async --stock 50 --total 200   # 异步下单（MQ 削峰链路）
 
 脚本流程：
   1. 发码登录（容器 mock 模式验证码直返）+ 建乘车人
@@ -12,6 +13,10 @@ TrainTicketing HTTP 层并发压测：经网关(8000) -> JWT -> business 容器 
   3. total 个下单请求以 concurrency 并发同起点放行（每个请求独立幂等键）
   4. 输出：成功/余票不足/锁忙分布、延迟分位（p50/p90/p99）、吞吐
   5. 防超卖断言：成功数 <= 库存 且 终态余票 == 库存 - 成功数
+
+--async 模式差异：下单打 /business/order/async（只做 Lua 预扣+发消息，毫秒级返回排队单号），
+  随后轮询订单列表直至全部收敛（4出票中 → 0待支付/5出票失败），额外断言无悬挂单。
+  延迟分位反映的是「受理延迟」而非出票延迟，出票耗时看收敛时间。
 
 压测期间建议开着 Grafana（http://localhost:3000，admin/admin）看容器 CPU/JVM/连接池曲线。
 """
@@ -37,6 +42,9 @@ API = None
 TOKEN = None
 PASSENGER = None
 RUN_DATE = None
+ARGS = None
+# 异步模式下成功受理的排队单号（受理成功 ≠ 出票成功，终态靠轮询收敛）
+ACCEPTED = []
 
 
 def call(method, path, form=None, jbody=None, timeout=30):
@@ -113,6 +121,11 @@ def setup(stock):
     return {"daily": daily, "sa": sa, "sc": sc}
 
 
+def order_path():
+    """下单接口：异步模式打 /order/async（MQ 削峰链路），否则同步 /order/save"""
+    return "/business/order/async" if ARGS.async_mode else "/business/order/save"
+
+
 def fire(ctx, total, concurrency):
     """同起点放行 total 个下单请求，返回逐请求结果 (ok, latency_ms, message)"""
     start_gate = Event()
@@ -125,9 +138,11 @@ def fire(ctx, total, concurrency):
                 "passengers": [{"passengerId": PASSENGER[0], "name": "压测乘客", "idCard": "110101199001019999"}]}
         start_gate.wait()
         t0 = time.perf_counter()
-        ok, d, raw = call("POST", "/business/order/save", jbody=body)
+        ok, d, raw = call("POST", order_path(), jbody=body)
         ms = (time.perf_counter() - t0) * 1000
         if ok and d and d.get("success"):
+            if ARGS.async_mode:
+                ACCEPTED.append(d["content"])
             results.append((True, ms, None))
         else:
             msg = (d.get("message") if d else None) or raw[:80]
@@ -157,9 +172,11 @@ def fire_sustain(ctx, duration, rate):
                 "runDate": RUN_DATE, "seatType": "3",
                 "passengers": [{"passengerId": PASSENGER[0], "name": "压测乘客", "idCard": "110101199001019999"}]}
         t0 = time.perf_counter()
-        ok, d, raw = call("POST", "/business/order/save", jbody=body)
+        ok, d, raw = call("POST", order_path(), jbody=body)
         ms = (time.perf_counter() - t0) * 1000
         if ok and d and d.get("success"):
+            if ARGS.async_mode:
+                ACCEPTED.append(d["content"])
             results.append((True, ms, None))
         else:
             msg = (d.get("message") if d else None) or raw[:80]
@@ -188,6 +205,21 @@ def pct(sorted_vals, p):
     return sorted_vals[k]
 
 
+def await_convergence(order_nos, timeout=150):
+    """异步模式：轮询订单列表直至全部排队单离开出票中（4），返回 (单号->状态映射, 收敛耗时秒)"""
+    target = set(order_nos)
+    status_map = {}
+    t0 = time.perf_counter()
+    while time.perf_counter() - t0 < timeout:
+        orders = must("GET", "/business/order/list") or []
+        status_map = {o["orderNo"]: o.get("status") for o in orders if o.get("orderNo") in target}
+        still = [n for n in target if status_map.get(n) == "4"]
+        if not still:
+            return status_map, time.perf_counter() - t0
+        time.sleep(2)
+    return status_map, time.perf_counter() - t0
+
+
 def main():
     global API, RUN_DATE, ARGS
     ap = argparse.ArgumentParser(description="TrainTicketing HTTP 并发压测（经网关打容器服务）")
@@ -199,6 +231,8 @@ def main():
     ap.add_argument("--sustain", type=int, default=0, metavar="秒数",
                     help="持续模式：按 --rate 打 N 秒（观察 Grafana 曲线用），与 --total/--concurrency 互斥")
     ap.add_argument("--rate", type=int, default=50, metavar="每秒请求数", help="持续模式的施压速率")
+    ap.add_argument("--async", dest="async_mode", action="store_true",
+                    help="异步下单模式：打 /order/async（MQ 削峰链路），轮询订单终态后断言")
     ARGS = ap.parse_args()
     API = ARGS.url
     TOKEN = [None]
@@ -210,11 +244,11 @@ def main():
 
     print("=== TrainTicketing HTTP 并发压测 ===")
     if ARGS.sustain:
-        print("模式: 持续  目标: %s  库存: %d  速率: %d req/s  时长: %ds" % (
-            API, ARGS.stock, ARGS.rate, ARGS.sustain))
+        print("模式: 持续%s  目标: %s  库存: %d  速率: %d req/s  时长: %ds" % (
+            "·异步" if ARGS.async_mode else "", API, ARGS.stock, ARGS.rate, ARGS.sustain))
     else:
-        print("模式: 冲击  目标: %s  库存: %d  并发: %d  总请求: %d" % (
-            API, ARGS.stock, ARGS.concurrency, ARGS.total))
+        print("模式: 冲击%s  目标: %s  库存: %d  并发: %d  总请求: %d" % (
+            "·异步" if ARGS.async_mode else "", API, ARGS.stock, ARGS.concurrency, ARGS.total))
     ctx = setup(ARGS.stock)
     if ARGS.sustain:
         results, wall = fire_sustain(ctx, ARGS.sustain, ARGS.rate)
@@ -251,16 +285,37 @@ def main():
         print("延迟(成功): avg=%.0fms p50=%.0f p90=%.0f p99=%.0f" % (
             statistics.mean(succ_lat), pct(succ_lat, 50), pct(succ_lat, 90), pct(succ_lat, 99)))
 
+    # 异步模式：轮询排队单收敛（4出票中 → 0待支付/5出票失败），统计出票分布
+    issued = len(succ)
+    failed = 0
+    hung = 0
+    conv_seconds = 0.0
+    if ARGS.async_mode:
+        print("\n[收敛] 轮询 %d 个排队单至终态 ..." % len(ACCEPTED))
+        status_map, conv_seconds = await_convergence(ACCEPTED)
+        finals = [status_map.get(n) for n in ACCEPTED]
+        issued = finals.count("0")       # 待支付 = 出票成功
+        failed = finals.count("5")       # 出票失败（余票已回补）
+        hung = len(ACCEPTED) - finals.count("0") - finals.count("5")  # 仍为出票中/未知 = 悬挂
+        print("出票成功  : %d（状态→待支付）" % issued)
+        print("出票失败  : %d（余票已回补）" % failed)
+        print("悬挂单    : %d（超时未收敛，需关注）" % hung)
+        print("收敛耗时  : %.1fs（受理完成到全部终态，含消费者选座落库）" % conv_seconds)
+
     rem = must("GET", "/business/ticket/query-remaining?dailyTrainId=%s&departStationId=%s&arriveStationId=%s"
                % (ctx["daily"], ctx["sa"], ctx["sc"]))
     remaining = int(rem[0]["remainingCount"]) if rem else 0
     print("\n----- 防超卖断言 -----")
-    print("库存=%d 成功=%d 终态余票=%d（期望 %d）" % (ARGS.stock, len(succ), remaining, ARGS.stock - len(succ)))
-    ok1 = len(succ) <= ARGS.stock
-    ok2 = remaining == ARGS.stock - len(succ)
-    print("结论      : %s（成功数不超库存: %s；余票与成票一致: %s）" % ("PASS ✔" if ok1 and ok2 else "FAIL ✘", ok1, ok2))
+    print("库存=%d 成功=%d 终态余票=%d（期望 %d）" % (ARGS.stock, issued, remaining, ARGS.stock - issued))
+    ok1 = issued <= ARGS.stock
+    ok2 = remaining == ARGS.stock - issued
+    ok3 = ARGS.async_mode and hung > 0
+    verdict = ok1 and ok2 and not ok3
+    print("结论      : %s（成功数不超库存: %s；余票与成票一致: %s%s）" % (
+        "PASS ✔" if verdict else "FAIL ✘", ok1, ok2,
+        "；无悬挂单: %s" % (not ok3) if ARGS.async_mode else ""))
     print("\n提示: 压测数据已进入 Prometheus，打开 Grafana(http://localhost:3000 admin/admin) 看曲线")
-    sys.exit(0 if ok1 and ok2 else 1)
+    sys.exit(0 if verdict else 1)
 
 
 if __name__ == "__main__":

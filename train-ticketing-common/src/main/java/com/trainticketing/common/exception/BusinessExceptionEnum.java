@@ -37,7 +37,8 @@ public enum BusinessExceptionEnum {
   BUSINESS_ORDER_LOCK_BUSY("当前下单人数过多，请稍后重试"),
   BUSINESS_MEMBER_NOT_LOGIN("未登录或登录已过期，请重新登录"),
   BUSINESS_ORDER_CONCURRENT_CONFLICT("订单状态已变更，请刷新后重试"),
-  BUSINESS_ORDER_IDEMPOTENT_REPEAT("请勿重复提交订单");
+  BUSINESS_ORDER_IDEMPOTENT_REPEAT("请勿重复提交订单"),
+  BUSINESS_ORDER_MESSAGE_SEND_FAILED("出票请求提交失败，请稍后重试");
 
   //描述
   private String desc;

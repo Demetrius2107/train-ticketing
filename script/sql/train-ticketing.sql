@@ -231,7 +231,7 @@ create table `train_order`
     `depart_station_id` bigint       not null comment '出发站id',
     `arrive_station_id` bigint       not null comment '到达站id',
     `run_date`         date          not null comment '乘车日期',
-    `status`           char(1)       not null default '0' comment '状态|枚举[OrderStatusEnum]: 0待支付 1已支付 2已取消 3已退票',
+    `status`           char(1)       not null default '0' comment '状态|枚举[OrderStatusEnum]: 0待支付 1已支付 2已取消 3已退票 4出票中 5出票失败',
     `total_amount`     decimal(10, 2) not null default 0.00 comment '订单总金额（元）',
     `expire_time`      datetime(3)   default null comment '支付过期时间（下单后10分钟）',
     `pay_time`         datetime(3)   default null comment '支付时间',
