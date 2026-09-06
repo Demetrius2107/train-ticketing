@@ -188,7 +188,8 @@ async function submitOrder() {
   booking.submitting = true
   try {
     const chosen = passengers.value.filter(p => booking.passengerIds.includes(p.id))
-    const orderNo = await api.orderSave({
+    // 异步下单：立即拿到排队订单号，出票由后端消费者完成，订单页轮询终态
+    const orderNo = await api.orderAsyncSave({
       idempotentKey: crypto.randomUUID(),
       dailyTrainId: booking.train.id,
       departStationId: booking.train.departStationId,
@@ -198,7 +199,7 @@ async function submitOrder() {
       passengers: chosen.map(p => ({ passengerId: p.id, name: p.name, idCard: p.idCard }))
     })
     booking.visible = false
-    message.success('下单成功，订单号 ' + orderNo)
+    message.success('已进入排队出票，订单号 ' + orderNo + '，可在订单页查看结果')
     router.push('/orders')
   } finally {
     booking.submitting = false
