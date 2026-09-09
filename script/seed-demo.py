@@ -5,8 +5,10 @@ Web 页面联调演示数据一键造数：造 4 个真实命名的车站 + 2 �
 可重复执行：车站按名称复用，车次编号带日期后缀不冲突。
 """
 import datetime
+import ipaddress
 import json
 import re
+import socket
 import time
 import urllib.error
 import urllib.parse
@@ -15,6 +17,25 @@ import urllib.request
 API = "http://127.0.0.1:8000"
 MOBILE = "13900000099"
 RUN_DATE = (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
+
+
+def validate_api_base(base):
+    """SSRF 防护：本地造数脚本的 API 基址只允许 http(s) 且解析为回环/私网地址，防误指公网目标。"""
+    parsed = urllib.parse.urlparse(base)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise SystemExit("API 基址必须是合法 http/https URL：%s" % base)
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        raise SystemExit("API 基址无法解析：%s" % parsed.hostname)
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not (ip.is_loopback or ip.is_private):
+            raise SystemExit("API 基址仅允许回环/私网地址（本地造数脚本防误指公网）：%s" % ip)
+
+
+validate_api_base(API)
 
 
 def call(method, path, form=None, token=None):

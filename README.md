@@ -29,7 +29,7 @@
 
 | 模块 | 端口 | 说明 |
 |---|---|---|
-| train-ticketing-gateway | 8000 | 网关：路由转发 + JWT 校验（规划限流） |
+| train-ticketing-gateway | 8000 | 网关：路由转发 + JWT 校验 + traceId 生成透传 + 下单链路 Redis 令牌桶限流 |
 | train-ticketing-member | 8001 | 会员服务：注册/短信验证码/登录/乘车人 |
 | train-ticketing-business | 8002 | 业务服务：车次/座位/排班/余票/订单核心域（含 MQ 出票消费者） |
 | train-ticketing-common | - | 公共模块：统一返回、异常处理、日志 AOP |
@@ -96,7 +96,12 @@ python script/load/order-load-test.py --async --stock 50 --total 200   # 异步�
 docker compose --profile monitoring up -d
 ```
 
-Prometheus(9090，抓 cAdvisor + member/business actuator 指标) + Grafana(3000，admin/admin，面板已预置) + cAdvisor(8888)。`TrainTicketing 压测总览` 面板含：服务 CPU/内存、JVM 堆/线程/GC、HikariCP 连接池、HTTP QPS 与 p95/p99 延迟。压测时开着面板即可实时观察。不需要监控时普通 `docker compose up -d` 不会启动这三件套。
+Prometheus(9090，抓 cAdvisor + gateway/member/business actuator 指标) + Grafana(3000，admin/admin，面板已预置) + cAdvisor(8888)。两张预置面板：
+
+- `TrainTicketing 压测总览`：系统层——服务 CPU/内存、JVM 堆/线程/GC、HikariCP 连接池、HTTP QPS 与 p95/p99 延迟。
+- `TrainTicketing 业务链路`：业务层——下单提交/拒绝分布、幂等命中、出票成败与 p95/p99 耗时、关单来源（延时消息 vs 兜底扫描）、支付/取消/退票、网关状态码分布（观察限流 429）。
+
+**网关限流**：`/business/order/**` 走独立路由，Redis 令牌桶按登录会员限流（默认每秒 20、突发 40，超限返回 429），阈值在 gateway 的 `application*.properties` 路由 `filters[0].args` 中调整。**日志链路**：网关生成 `X-Trace-Id` 透传下游，各服务日志 pattern 带 `[traceId]`；MQ 消费侧按单号自建 `mq-create-{orderNo}` / `mq-close-{orderId}`，全链路日志可按 traceId 串联。不需要监控时普通 `docker compose up -d` 不会启动监控三件套。
 
 ## 分支规范
 

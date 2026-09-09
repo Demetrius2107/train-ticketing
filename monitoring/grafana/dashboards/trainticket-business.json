@@ -1,0 +1,299 @@
+{
+  "title": "TrainTicketing 业务链路",
+  "uid": "trainticket-business",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "5s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "下单提交 QPS（按链路）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode) (rate(tt_order_submit_total[1m]))",
+          "legendFormat": "{{mode}}"
+        }
+      ],
+      "description": "下单提交速率（sync=同步下单，async=异步下单受理）。怎么读：受理数 ≠ 出票数——异步链路下这里是『进入队列』的量，实际出票看『出票结果』面板；压测时两条线都不涨说明瓶颈在更上游（网关/校验/预扣）。"
+    },
+    {
+      "id": 2,
+      "title": "下单拒绝 QPS（按原因）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (rate(tt_order_submit_reject_total[1m]))",
+          "legendFormat": "{{reason}}"
+        }
+      ],
+      "description": "下单被业务规则拒绝的速率，reason 为 BusinessExceptionEnum 枚举名。怎么读：BUSINESS_SEAT_NOT_ENOUGH 高企=余票打光或缓存-DB 漂移；BUSINESS_ORDER_LOCK_BUSY 高=分布式锁竞争激烈（可考虑加大座位类型并行度）；BUSINESS_ORDER_IDEMPOTENT_REPEAT 高=压测脚本重复提交。"
+    },
+    {
+      "id": 3,
+      "title": "幂等命中 QPS",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(tt_order_idempotent_hit_total[1m])",
+          "legendFormat": "幂等命中"
+        }
+      ],
+      "description": "异步下单幂等键命中（重复提交返回既有单号，不产生新订单）的速率。怎么读：压测脚本未随机化 idempotentKey 时会全量命中；正常业务里持续偏高说明前端重复触发。"
+    },
+    {
+      "id": 4,
+      "title": "出票结果 QPS（成败）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (rate(tt_order_ticket_total[1m]))",
+          "legendFormat": "{{result}}"
+        }
+      ],
+      "description": "MQ 消费者出票结果：success=出票成功转待支付；fail=终态化出票失败（余票耗尽或兜底扫描收敛悬挂单，余票已回补）。怎么读：异步链路下 success 滞后于 async 提交即消费积压；fail 持续出现要结合对账看缓存-DB 漂移。"
+    },
+    {
+      "id": 5,
+      "title": "出票耗时 p95 / p99（ms）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tt_order_ticket_duration_seconds{quantile=\"0.95\"} * 1000",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "B",
+          "expr": "tt_order_ticket_duration_seconds{quantile=\"0.99\"} * 1000",
+          "legendFormat": "p99"
+        }
+      ],
+      "description": "消费者出票耗时（锁等待+行锁选座+落库）。怎么读：p95 平稳而 p99 尖刺=偶发锁忙等或 GC；整体抬升=DB 选座行锁竞争加剧，是扩消费线程前先要看的天花板。"
+    },
+    {
+      "id": 6,
+      "title": "关单 QPS（按来源）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source) (rate(tt_order_close_total[1m]))",
+          "legendFormat": "{{source}}"
+        }
+      ],
+      "description": "待支付订单关单速率，source=delay（延时消息触发）/ sweep（兜底扫描触发）。怎么读：正常形态是 delay 主导、sweep 趋近 0；sweep 占比升高说明延时消息链路有丢失/消费失败，需要查 RocketMQ。"
+    },
+    {
+      "id": 7,
+      "title": "支付 / 取消 / 退票 QPS",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(tt_order_pay_total[1m])",
+          "legendFormat": "支付"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(tt_order_cancel_total[1m])",
+          "legendFormat": "取消"
+        },
+        {
+          "refId": "C",
+          "expr": "rate(tt_order_refund_total[1m])",
+          "legendFormat": "退票"
+        }
+      ],
+      "description": "订单终态流转速率。怎么读：支付量应约等于（提交 - 拒绝 - 关单）；取消/退票异常放量对应前端或压测脚本行为变化。"
+    },
+    {
+      "id": 8,
+      "title": "网关请求 QPS（按状态码，观察限流 429）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (httpStatusCode) (rate(spring_cloud_gateway_requests[1m]))",
+          "legendFormat": "{{httpStatusCode}}"
+        }
+      ],
+      "description": "网关路由转发结果分布。怎么读：429=Redis 令牌桶限流触发（默认每会员 20/s、突发 40，可在 gateway 配置调整）；401=JWT 校验失败；5xx=下游异常，需要结合 business/member 面板定位。"
+    },
+    {
+      "id": 9,
+      "title": "兜底扫描收敛订单速率",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(tt_order_sweep_total[1m])",
+          "legendFormat": "兜底收敛"
+        }
+      ],
+      "description": "每 5 分钟兜底扫描收敛的订单数（超时关单 + 悬挂出票中终态化）。怎么读：健康时几乎恒为 0；周期性尖峰=每轮都有单被兜住，说明延时消息/出票消息可靠性有问题，去查 MQ 与消费者错误日志。"
+    }
+  ]
+}

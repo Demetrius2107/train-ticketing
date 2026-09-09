@@ -40,3 +40,8 @@ build/
 .atomcode/
 log/
 .zcode/
+.mimosa/
+
+# Python
+__pycache__/
+*.pyc

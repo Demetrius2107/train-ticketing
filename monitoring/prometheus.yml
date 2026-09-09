@@ -20,3 +20,9 @@ scrape_configs:
     metrics_path: /member/actuator/prometheus
     static_configs:
       - targets: ['member:8001']
+
+  # gateway 网关指标（actuator，无 context-path；观察路由 QPS 与限流 429）
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['gateway:8000']
