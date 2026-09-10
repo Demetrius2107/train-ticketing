@@ -128,7 +128,8 @@ public class TicketCacheService {
     /**
      * 获取区间余票（懒加载）：缓存未命中时查 DB 回填。
      * 相邻子段模型下，[depart,arrive] 余票 = 路径上各相邻段余票的最小值。
-     * 单段缓存缺失时按 DB 该相邻段可售数回填（DB 区间占用模型保证正确性）。
+     * 单次 HMGET 批量取全部相邻段，仅对缺失段按 DB 该相邻段可售数回填
+     * （DB 区间占用模型保证正确性），替代逐段 HGET 的多轮往返。
      *
      * @param dailyTrainId 排班ID
      * @param seatType     座位类型
@@ -139,45 +140,34 @@ public class TicketCacheService {
     public int getRemaining(Long dailyTrainId, String seatType, Integer departIndex, Integer arriveIndex) {
         String key = remainKey(dailyTrainId, seatType);
         List<Integer> segments = expandSegments(departIndex, arriveIndex);
-        int min = Integer.MAX_VALUE;
-        boolean anyMissing = false;
+        List<Object> fields = new ArrayList<>(segments.size());
         for (int seg : segments) {
-            String field = remainField(seg);
-            String cached = (String) stringRedisTemplate.opsForHash().get(key, field);
-            if (cached == null) {
-                anyMissing = true;
-                break;
-            }
-            min = Math.min(min, Integer.parseInt(cached));
+            fields.add(remainField(seg));
         }
-        if (!anyMissing) {
+        List<Object> cached = stringRedisTemplate.opsForHash().multiGet(key, fields);
+        int min = Integer.MAX_VALUE;
+        List<Integer> missingSegments = new ArrayList<>();
+        for (int i = 0; i < segments.size(); i++) {
+            Object cachedValue = cached.get(i);
+            if (cachedValue == null) {
+                missingSegments.add(segments.get(i));
+            } else {
+                min = Math.min(min, Integer.parseInt(String.valueOf(cachedValue)));
+            }
+        }
+        if (missingSegments.isEmpty()) {
             return min;
         }
-        // 懒加载回填：逐段查 DB 该相邻段 [i, i+1] 的可售数并只回填缺失段。
+        // 懒加载回填：缺失段查 DB 该相邻段 [i, i+1] 的可售数并回填。
         // 不能用整区间 [depart, arrive] 的结果统一回填——那是 min 语义，会把
         // 未售罄段也写成 min 造成少卖；逐段查与对账逻辑一致。
-        int result = Integer.MAX_VALUE;
-        for (int seg : segments) {
-            String field = remainField(seg);
-            String cached = (String) stringRedisTemplate.opsForHash().get(key, field);
-            if (cached != null) {
-                result = Math.min(result, Integer.parseInt(cached));
-                continue;
-            }
-            int segCount = 0;
-            List<SeatRemainingResp> remaining = dailyTrainSeatMapper.selectRemainingByInterval(
-                    dailyTrainId, seg, seg + 1);
-            for (SeatRemainingResp resp : remaining) {
-                if (seatType.equals(resp.getSeatType())) {
-                    segCount = resp.getRemainingCount().intValue();
-                    break;
-                }
-            }
-            stringRedisTemplate.opsForHash().put(key, field, String.valueOf(segCount));
-            LOG.info("余票缓存回填 key={}, 段={}, count={}", key, field, segCount);
-            result = Math.min(result, segCount);
+        for (int seg : missingSegments) {
+            int segCount = queryDbSegmentRemaining(dailyTrainId, seatType, seg);
+            stringRedisTemplate.opsForHash().put(key, remainField(seg), String.valueOf(segCount));
+            LOG.info("余票缓存回填 key={}, 段={}, count={}", key, remainField(seg), segCount);
+            min = Math.min(min, segCount);
         }
-        return result;
+        return min;
     }
 
     /**
