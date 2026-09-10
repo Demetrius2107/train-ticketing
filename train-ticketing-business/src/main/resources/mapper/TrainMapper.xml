@@ -36,6 +36,14 @@
     where id = #{id,jdbcType=BIGINT}
     limit 1
   </select>
+  <!-- 车次列表页批量取车次信息，替代逐排班 selectById 的 N+1 -->
+  <select id="selectByIds" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train
+    where id in
+    <foreach collection="ids" item="item" open="(" separator="," close=")">#{item}</foreach>
+  </select>
   <select id="selectList" resultMap="BaseResultMap">
     select
     <include refid="Base_Column_List" />

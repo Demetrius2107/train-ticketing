@@ -41,6 +41,14 @@ public interface TrainMapper {
   Train selectById(@Param("id") Long id);
 
   /**
+   * 按主键集合批量查询车次（车次列表页批量组装用）
+   *
+   * @param ids 车次ID集合
+   * @return 车次列表（按传入顺序无关，调用方自行建索引）
+   */
+  List<Train> selectByIds(@Param("ids") List<Long> ids);
+
+  /**
    * 按关键字模糊查询车次列表（车次编号）
    *
    * @param keyword 查询关键字，为空返回全部

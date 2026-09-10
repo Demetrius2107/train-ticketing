@@ -59,6 +59,29 @@
     group by s.seat_type
     order by s.seat_type
   </select>
+  <!-- 车次列表页批量余票：各排班区间由 join train_station 按各自站序推得，
+       占用判定语义与单排班 selectRemainingByInterval 一致（NOT EXISTS 区间重叠） -->
+  <select id="selectRemainingByIntervalBatch" resultType="com.trainticketing.business.resp.SeatRemainingBatchResp">
+    select dt.id as dailyTrainId,
+           s.seat_type as seatType,
+           sum(case when not exists (
+             select 1 from train_order_item oi
+             where oi.daily_train_seat_id = s.id
+               and oi.depart_index &lt;= ts_to.station_index
+               and oi.arrive_index &gt;= ts_from.station_index
+           ) then 1 else 0 end) as remainingCount
+    from daily_train_seat s
+    join daily_train dt on dt.id = s.daily_train_id
+    join train_station ts_from on ts_from.train_id = dt.train_id
+      and ts_from.station_id = #{fromStationId,jdbcType=BIGINT}
+    join train_station ts_to on ts_to.train_id = dt.train_id
+      and ts_to.station_id = #{toStationId,jdbcType=BIGINT}
+    where s.daily_train_id in
+    <foreach collection="dailyTrainIds" item="item" open="(" separator="," close=")">#{item}</foreach>
+      and s.sale_status = '0'
+    group by dt.id, s.seat_type
+    order by dt.id, s.seat_type
+  </select>
   <select id="selectAvailableByInterval" resultMap="BaseResultMap">
     select
     <include refid="Alias_Column_List" />

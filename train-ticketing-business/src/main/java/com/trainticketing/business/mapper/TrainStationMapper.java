@@ -41,6 +41,14 @@ public interface TrainStationMapper {
   List<TrainStation> selectByTrainId(@Param("trainId") Long trainId);
 
   /**
+   * 按车次ID集合批量查询经停站（车次列表页批量取站序用）
+   *
+   * @param trainIds 车次ID集合
+   * @return 经停站列表（车次内按站序升序）
+   */
+  List<TrainStation> selectByTrainIds(@Param("trainIds") List<Long> trainIds);
+
+  /**
    * 按车次+站序查询（站序唯一性校验用）
    *
    * @param trainId      车次ID

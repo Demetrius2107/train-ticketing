@@ -1,6 +1,7 @@
 package com.trainticketing.business.mapper;
 
 import com.trainticketing.business.domain.DailyTrainSeat;
+import com.trainticketing.business.resp.SeatRemainingBatchResp;
 import com.trainticketing.business.resp.SeatRemainingResp;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -55,6 +56,21 @@ public interface DailyTrainSeatMapper {
   List<SeatRemainingResp> selectRemainingByInterval(@Param("dailyTrainId") Long dailyTrainId,
                                                     @Param("departIndex") Integer departIndex,
                                                     @Param("arriveIndex") Integer arriveIndex);
+
+  /**
+   * 批量按区间统计余票（车次列表页用）：一次查询返回多个排班×座位类型的余票。
+   * 各排班的查询区间 [departIndex, arriveIndex] 不作为入参，而是由
+   * join train_station 按各自车次的出发/到达站站序推得，占用判定语义
+   * 与 {@link #selectRemainingByInterval} 完全一致。
+   *
+   * @param dailyTrainIds 排班ID集合
+   * @param fromStationId 出发站id
+   * @param toStationId   到达站id
+   * @return 每行一个（排班, 座位类型）余票结果
+   */
+  List<SeatRemainingBatchResp> selectRemainingByIntervalBatch(@Param("dailyTrainIds") List<Long> dailyTrainIds,
+                                                              @Param("fromStationId") Long fromStationId,
+                                                              @Param("toStationId") Long toStationId);
 
   /**
    * 按区间+座位类型查询可售座位明细（下单分配用）：

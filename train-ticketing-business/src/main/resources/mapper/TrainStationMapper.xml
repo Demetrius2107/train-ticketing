@@ -34,6 +34,15 @@
     where train_id = #{trainId,jdbcType=BIGINT}
     order by station_index
   </select>
+  <!-- 车次列表页批量取经停站序，替代逐车次 selectByStation 的 N+1 -->
+  <select id="selectByTrainIds" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from train_station
+    where train_id in
+    <foreach collection="trainIds" item="item" open="(" separator="," close=")">#{item}</foreach>
+    order by train_id, station_index
+  </select>
   <select id="selectByIndex" resultMap="BaseResultMap">
     select
     <include refid="Base_Column_List" />

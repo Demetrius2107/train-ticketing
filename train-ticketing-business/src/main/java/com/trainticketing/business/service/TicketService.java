@@ -10,6 +10,7 @@ import com.trainticketing.business.mapper.DailyTrainMapper;
 import com.trainticketing.business.mapper.DailyTrainSeatMapper;
 import com.trainticketing.business.mapper.TrainMapper;
 import com.trainticketing.business.mapper.TrainStationMapper;
+import com.trainticketing.business.resp.SeatRemainingBatchResp;
 import com.trainticketing.business.resp.SeatRemainingResp;
 import com.trainticketing.business.resp.TrainTicketResp;
 import com.trainticketing.common.exception.BusinessException;
@@ -18,7 +19,11 @@ import jakarta.annotation.Resource;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +97,9 @@ public class TicketService {
     /**
      * 按出发站/到达站/日期查询车次列表及各自区间余票（用户侧核心查询）。
      * 仅返回当天运行中的排班；每个排班附带经停站序与区间余票。
+     * <p>批量组装：车次信息、经停站序、区间余票各一次批量查询，
+     * 消除逐排班 selectById/selectByStation/selectRemainingByInterval 的 N+1；
+     * 余票语义与详情页 queryRemaining 一致（区间占用模型，NOT EXISTS 重叠判定）。
      *
      * @param fromStationId 出发站id
      * @param toStationId   到达站id
@@ -100,35 +108,45 @@ public class TicketService {
      */
     public List<TrainTicketResp> queryByStations(Long fromStationId, Long toStationId, LocalDate runDate) {
         List<DailyTrain> dailyList = dailyTrainMapper.selectByStationsAndDate(fromStationId, toStationId, runDate);
-        List<TrainTicketResp> respList = new ArrayList<>();
-        if (CollUtil.isNotEmpty(dailyList)) {
-            for (DailyTrain dailyTrain : dailyList) {
-                respList.add(buildTicketResp(dailyTrain, fromStationId, toStationId));
+        if (CollUtil.isEmpty(dailyList)) {
+            return new ArrayList<>();
+        }
+        List<Long> dailyTrainIds = dailyList.stream().map(DailyTrain::getId).toList();
+        List<Long> trainIds = dailyList.stream().map(DailyTrain::getTrainId).distinct().toList();
+        Map<Long, Train> trainMap = trainMapper.selectByIds(trainIds).stream()
+                .collect(Collectors.toMap(Train::getId, Function.identity()));
+        Map<Long, Map<Long, TrainStation>> stationMap = trainStationMapper.selectByTrainIds(trainIds).stream()
+                .collect(Collectors.groupingBy(TrainStation::getTrainId,
+                        Collectors.toMap(TrainStation::getStationId, Function.identity())));
+        Map<Long, List<SeatRemainingResp>> remainingMap = new HashMap<>();
+        for (SeatRemainingBatchResp batch : dailyTrainSeatMapper.selectRemainingByIntervalBatch(
+                dailyTrainIds, fromStationId, toStationId)) {
+            SeatRemainingResp resp = new SeatRemainingResp();
+            resp.setSeatType(batch.getSeatType());
+            resp.setRemainingCount(batch.getRemainingCount());
+            remainingMap.computeIfAbsent(batch.getDailyTrainId(), k -> new ArrayList<>()).add(resp);
+        }
+        List<TrainTicketResp> respList = new ArrayList<>(dailyList.size());
+        for (DailyTrain dailyTrain : dailyList) {
+            Train train = trainMap.get(dailyTrain.getTrainId());
+            Map<Long, TrainStation> stations = stationMap.getOrDefault(dailyTrain.getTrainId(), Map.of());
+            TrainStation depart = stations.get(fromStationId);
+            TrainStation arrive = stations.get(toStationId);
+            // selectByStationsAndDate 已 join 经停站，正常不会缺；防御脏数据跳过该车次
+            if (train == null || depart == null || arrive == null) {
+                LOG.warn("车次列表数据不完整，跳过 dailyTrainId={}, trainId={}",
+                        dailyTrain.getId(), dailyTrain.getTrainId());
+                continue;
             }
+            TrainTicketResp resp = BeanUtil.copyProperties(dailyTrain, TrainTicketResp.class);
+            resp.setTrainCode(train.getCode());
+            resp.setDepartStationId(fromStationId);
+            resp.setArriveStationId(toStationId);
+            resp.setDepartIndex(depart.getStationIndex());
+            resp.setArriveIndex(arrive.getStationIndex());
+            resp.setRemainingList(remainingMap.getOrDefault(dailyTrain.getId(), List.of()));
+            respList.add(resp);
         }
         return respList;
-    }
-
-    /**
-     * 组装单个车次的余票响应（车次信息 + 区间余票）
-     *
-     * @param dailyTrain    排班
-     * @param fromStationId 出发站id
-     * @param toStationId   到达站id
-     * @return 车次余票响应
-     */
-    private TrainTicketResp buildTicketResp(DailyTrain dailyTrain, Long fromStationId, Long toStationId) {
-        Train train = trainMapper.selectById(dailyTrain.getTrainId());
-        TrainStation depart = trainStationMapper.selectByStation(dailyTrain.getTrainId(), fromStationId);
-        TrainStation arrive = trainStationMapper.selectByStation(dailyTrain.getTrainId(), toStationId);
-        TrainTicketResp resp = BeanUtil.copyProperties(dailyTrain, TrainTicketResp.class);
-        resp.setTrainCode(train.getCode());
-        resp.setDepartStationId(fromStationId);
-        resp.setArriveStationId(toStationId);
-        resp.setDepartIndex(depart.getStationIndex());
-        resp.setArriveIndex(arrive.getStationIndex());
-        resp.setRemainingList(dailyTrainSeatMapper.selectRemainingByInterval(dailyTrain.getId(),
-                depart.getStationIndex(), arrive.getStationIndex()));
-        return resp;
     }
 }
