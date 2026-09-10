@@ -13,6 +13,7 @@ import com.trainticketing.business.domain.TrainOrder;
 import com.trainticketing.business.domain.TrainOrderItem;
 import com.trainticketing.business.domain.TrainPrice;
 import com.trainticketing.business.domain.TrainStation;
+import com.trainticketing.business.enums.DailyTrainStatusEnum;
 import com.trainticketing.business.enums.OrderStatusEnum;
 import com.trainticketing.business.mapper.DailyTrainMapper;
 import com.trainticketing.business.mapper.DailyTrainSeatMapper;
@@ -30,6 +31,7 @@ import com.trainticketing.common.exception.BusinessExceptionEnum;
 import jakarta.annotation.Resource;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
@@ -135,6 +137,7 @@ public class OrderService {
                 || depart.getStationIndex() >= arrive.getStationIndex()) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
         }
+        validateRunDateAndStatus(dailyTrain, req);
         // 分布式锁：同排班同座位类型串行化，不同座位类型可并行
         String lockKey = TicketLockConfig.lockKey(req.getDailyTrainId(), req.getSeatType());
         RLock lock = redissonClient.getLock(lockKey);
@@ -202,6 +205,25 @@ public class OrderService {
      */
     private String idemKey(Long memberId, String idempotentKey) {
         return IDEM_KEY_PREFIX + memberId + ":" + idempotentKey;
+    }
+
+    /**
+     * 排班状态与乘车日期校验（同步/异步下单共用）：
+     * 仅运行中排班可售；乘车日期必须与排班日期一致，且不得早于当天。
+     *
+     * @param dailyTrain 排班
+     * @param req        下单请求
+     */
+    private void validateRunDateAndStatus(DailyTrain dailyTrain, OrderSaveReq req) {
+        if (!DailyTrainStatusEnum.RUN.getCode().equals(dailyTrain.getStatus())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_DAILY_TRAIN_NOT_RUNNING);
+        }
+        if (!dailyTrain.getRunDate().equals(req.getRunDate())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_RUN_DATE_MISMATCH);
+        }
+        if (req.getRunDate().isBefore(LocalDate.now())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_RUN_DATE_EXPIRED);
+        }
     }
 
     /**
@@ -490,6 +512,7 @@ public class OrderService {
                 || depart.getStationIndex() >= arrive.getStationIndex()) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
         }
+        validateRunDateAndStatus(dailyTrain, req);
         TrainPrice trainPrice = trainPriceMapper.selectByTrainAndType(dailyTrain.getTrainId(), req.getSeatType());
         if (ObjectUtil.isNull(trainPrice)) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_TRAIN_PRICE_NOT_EXIST);
