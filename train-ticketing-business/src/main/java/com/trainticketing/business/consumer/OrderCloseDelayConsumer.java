@@ -1,11 +1,13 @@
 package com.trainticketing.business.consumer;
 
+import com.trainticketing.business.metrics.OrderMetrics;
 import com.trainticketing.business.service.OrderService;
 import jakarta.annotation.Resource;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Component;
  *
  * @author wanqiu
  * @createTime 2026-09-06
+ * @updateTime 2026-09-09
  * @since 1.0
  */
 @Component
@@ -32,16 +35,26 @@ public class OrderCloseDelayConsumer implements RocketMQListener<String> {
     @Resource
     private OrderService orderService;
 
+    @Resource
+    private OrderMetrics orderMetrics;
+
     /**
-     * 延时到期关单检查，消息体为订单ID字符串
+     * 延时到期关单检查，消息体为订单ID字符串。
+     * 消费线程为 MQ 线程池线程（无 HTTP 入口的 traceId），按订单ID自建 traceId 进 MDC
+     * （mq-close-{orderId}），关单日志可与下单/支付日志按 traceId 关联；closeOrder CAS 幂等，
+     * 仅实际关单时计 delay 来源指标（与兜底扫描的 sweep 来源区分）。
      *
      * @param orderId 订单ID
      */
     @Override
     public void onMessage(String orderId) {
-        boolean closed = orderService.closeOrder(Long.valueOf(orderId));
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("延时关单消息处理完毕 orderId={}, closed={}", orderId, closed);
+        MDC.put("traceId", "mq-close-" + orderId);
+        try {
+            if (orderService.closeOrder(Long.valueOf(orderId))) {
+                orderMetrics.close("delay");
+            }
+        } finally {
+            MDC.remove("traceId");
         }
     }
 }

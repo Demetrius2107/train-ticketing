@@ -20,7 +20,9 @@ Redis 缓存只服务下单预扣。本脚本回答：查询路径能扛多少 Q
   GET /business/ticket/query             （按车站对+日期列车次列表）
 """
 import argparse
+import ipaddress
 import json
+import socket
 import statistics
 import subprocess
 import sys
@@ -40,6 +42,22 @@ API = None
 TOKEN = [None]
 ARGS = None
 RUN_DATE = None
+
+
+def validate_api_base(base):
+    """SSRF 防护：本地压测工具的 API 基址只允许 http(s) 且解析为回环/私网地址，防误指公网目标。"""
+    parsed = urllib.parse.urlparse(base)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise SystemExit("API 基址必须是合法 http/https URL：%s" % base)
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        raise SystemExit("API 基址无法解析：%s" % parsed.hostname)
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not (ip.is_loopback or ip.is_private):
+            raise SystemExit("API 基址仅允许回环/私网地址（本地压测工具防误指公网）：%s" % ip)
 
 
 def call(method, path, form=None, timeout=30):
@@ -210,6 +228,7 @@ def main():
     ap.add_argument("--remaining-ratio", type=int, default=70, help="query-remaining 占比 %%")
     ARGS = ap.parse_args()
     API = ARGS.url
+    validate_api_base(API)
     import datetime
     RUN_DATE = (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
 

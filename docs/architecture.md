@@ -36,7 +36,7 @@
 
 | 模块 | 端口 | 职责 |
 |---|---|---|
-| train-ticketing-gateway | 8000 | 统一入口：路由转发 + JWT 校验（`AuthFilter` 校验后注入 `X-Member-Id`） |
+| train-ticketing-gateway | 8000 | 统一入口：路由转发 + JWT 校验（`AuthFilter` 校验后注入 `X-Member-Id`）+ traceId 透传 + 下单链路 Redis 令牌桶限流 |
 | train-ticketing-member | 8001 | 会员域：注册、短信验证码（容器 mock 直返）、登录、乘车人（context-path `/member`） |
 | train-ticketing-business | 8002 | 核心域：车站/车次/座位/排班/余票/订单；同步下单 + MQ 异步出票消费者 + 延时关单 + 对账（context-path `/business`） |
 | train-ticketing-common | - | 公共：`CommonResp`、`BusinessException`/`BusinessExceptionEnum`、日志 AOP |
@@ -44,7 +44,7 @@
 
 ## 3. 请求链路
 
-**通用链路**：web(9000) → gateway(8000)（JWT 校验，注入 `X-Member-Id`）→ member/business → Service → Mapper → MySQL；响应统一 `CommonResp{success, message, content}`，业务异常由 `ControllerExceptionHandler` 归一。
+**通用链路**：web(9000) → gateway(8000)（traceId 生成透传 `X-Trace-Id`；JWT 校验，注入 `X-Member-Id`；`/business/order/**` 另有 Redis 令牌桶限流，按会员 20/s、突发 40，超限 429）→ member/business（`TraceIdFilter` 读取透传 header 进 MDC，日志 pattern 带 `[traceId]`）→ Service → Mapper → MySQL；响应统一 `CommonResp{success, message, content}`，业务异常由 `ControllerExceptionHandler` 归一。MQ 消费侧无 HTTP 入口，按单号自建 traceId（`mq-create-{orderNo}` / `mq-close-{orderId}`）。
 
 **同步下单**（保留，压测脚本默认）：`POST /business/order/save`
 幂等（Redis SETNX）→ 锁外校验 → Redisson 锁（`ticket:lock:{排班}:{座位类型}`）→ 事务【Lua 预扣 → 行锁选座+贪心分配 → 落订单/明细】→ 提交后发延时关单消息。

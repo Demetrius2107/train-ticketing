@@ -10,6 +10,7 @@ import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 /**
@@ -44,6 +45,17 @@ public class OrderCreateConsumer implements RocketMQListener<OrderCreateMessage>
 
     @Override
     public void onMessage(OrderCreateMessage message) {
+        // MQ 线程池线程无 HTTP 入口的 traceId，按订单号自建（mq-create-{orderNo}），
+        // 出票/重试日志可与下单日志按 traceId 关联
+        MDC.put("traceId", "mq-create-" + message.getOrderNo());
+        try {
+            doOnMessage(message);
+        } finally {
+            MDC.remove("traceId");
+        }
+    }
+
+    private void doOnMessage(OrderCreateMessage message) {
         try {
             orderService.processAsyncOrder(message);
         } catch (BusinessException e) {

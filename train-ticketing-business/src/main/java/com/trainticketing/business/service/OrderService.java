@@ -21,6 +21,7 @@ import com.trainticketing.business.mapper.TrainOrderMapper;
 import com.trainticketing.business.mapper.TrainPriceMapper;
 import com.trainticketing.business.mapper.TrainStationMapper;
 import com.trainticketing.business.message.OrderCreateMessage;
+import com.trainticketing.business.metrics.OrderMetrics;
 import com.trainticketing.business.req.OrderSaveReq;
 import com.trainticketing.business.resp.OrderQueryResp;
 import com.trainticketing.business.service.seat.SeatAllocationStrategy;
@@ -96,6 +97,9 @@ public class OrderService {
     @Resource
     private OrderMqConfig orderMqConfig;
 
+    @Resource
+    private OrderMetrics orderMetrics;
+
     /**
      * 自身代理引用：下单需先加分布式锁（非事务）再进入事务方法，避免同类自调用导致 @Transactional 失效
      */
@@ -141,7 +145,12 @@ public class OrderService {
             if (!locked) {
                 throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
             }
-            return self.saveInTx(req, dailyTrain, depart, arrive);
+            String orderNo = self.saveInTx(req, dailyTrain, depart, arrive);
+            orderMetrics.submit("sync");
+            return orderNo;
+        } catch (BusinessException e) {
+            orderMetrics.submitReject(e.getE().name());
+            throw e;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
@@ -301,6 +310,7 @@ public class OrderService {
         //（该 bug 曾被整点对账按 DB 重建缓存掩盖）。
         releaseRemainingAfterCommit(order);
         trainOrderItemMapper.deleteByOrderId(order.getId());
+        orderMetrics.cancel();
         LOG.info("取消订单成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
     }
 
@@ -394,6 +404,7 @@ public class OrderService {
         if (updated == 0) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_CONCURRENT_CONFLICT);
         }
+        orderMetrics.pay();
         LOG.info("订单支付成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
     }
 
@@ -428,6 +439,7 @@ public class OrderService {
         // 先取回补参数（读明细）再删明细，原因同 cancel：删后读恒为空会导致余票永不回补
         releaseRemainingAfterCommit(order);
         trainOrderItemMapper.deleteByOrderId(order.getId());
+        orderMetrics.refund();
         LOG.info("退票成功 orderNo={}, memberId={}", orderNo, order.getMemberId());
     }
 
@@ -459,6 +471,7 @@ public class OrderService {
             }
         }
         if (ObjectUtil.isNotNull(prev)) {
+            orderMetrics.idempotentHit();
             return prev;
         }
         // 2. 只读校验放请求线程快速失败：排班、站序、票价（与同步链路一致）
@@ -481,6 +494,7 @@ public class OrderService {
         int arriveIndex = arrive.getStationIndex();
         // 3. Lua 原子预扣区间余票：削峰后防超卖的第一道防线仍是 Redis 计数器
         if (ticketCacheService.decrRemaining(req.getDailyTrainId(), req.getSeatType(), departIndex, arriveIndex, need) < 0) {
+            orderMetrics.submitReject(BusinessExceptionEnum.BUSINESS_SEAT_NOT_ENOUGH.name());
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_SEAT_NOT_ENOUGH);
         }
         boolean orderInserted = false;
@@ -497,9 +511,11 @@ public class OrderService {
             rocketMQTemplate.syncSend(orderMqConfig.getCreateTopic(),
                     MessageBuilder.withPayload(buildCreateMessage(order, req, trainPrice, departIndex, arriveIndex)).build());
             LOG.info("异步下单受理 orderNo={}, memberId={}, items={}", orderNo, req.getMemberId(), need);
+            orderMetrics.submit("async");
             return orderNo;
         } catch (RuntimeException e) {
             LOG.error("异步下单失败，进入补偿 orderNo={}, orderInserted={}, error={}", orderNo, orderInserted, e.getMessage());
+            orderMetrics.submitReject(e instanceof BusinessException be ? be.getE().name() : "MESSAGE_SEND_FAILED");
             compensateQueuingOrder(orderId, req.getDailyTrainId(), req.getSeatType(),
                     departIndex, arriveIndex, need, orderInserted, contextSaved);
             if (e instanceof BusinessException businessException) {
@@ -604,6 +620,21 @@ public class OrderService {
      * @param message 出票消息
      */
     public void processAsyncOrder(OrderCreateMessage message) {
+        long start = System.currentTimeMillis();
+        try {
+            doProcessAsyncOrder(message);
+        } finally {
+            orderMetrics.recordTicketDuration(System.currentTimeMillis() - start);
+        }
+    }
+
+    /**
+     * 出票核心逻辑（供 {@link #processAsyncOrder} 计时包裹）：分布式锁串行化选座后进入事务体，
+     * 抛出的异常由消费者分型：余票耗尽/并发冲突为终态，锁忙等临时失败走消息重试。
+     *
+     * @param message 出票消息
+     */
+    private void doProcessAsyncOrder(OrderCreateMessage message) {
         String lockKey = TicketLockConfig.lockKey(message.getDailyTrainId(), message.getSeatType());
         RLock lock = redissonClient.getLock(lockKey);
         boolean locked = false;
@@ -687,6 +718,7 @@ public class OrderService {
         }
         // 4. 事务提交后发延时关单消息（发送失败仅告警：兜底扫描会在过期后关单）
         registerCloseDelayAfterCommit(order.getId());
+        orderMetrics.ticket("success");
         LOG.info("异步出票成功 orderNo={}, memberId={}, items={}", order.getOrderNo(), order.getMemberId(), need);
     }
 
@@ -710,6 +742,7 @@ public class OrderService {
         if (updated == 0) {
             return false;
         }
+        orderMetrics.ticket("fail");
         ticketCacheService.incrRemaining(dailyTrainId, seatType, departIndex, arriveIndex, need);
         redissonClient.getBucket(PRE_DECR_KEY_PREFIX + orderId).delete();
         return true;
@@ -756,6 +789,7 @@ public class OrderService {
         List<TrainOrder> expiredOrders = trainOrderMapper.selectExpiredPending(new Date());
         for (TrainOrder order : expiredOrders) {
             if (self.closeOrder(order.getId())) {
+                orderMetrics.close("sweep");
                 count++;
             }
         }
@@ -770,6 +804,7 @@ public class OrderService {
         if (count > 0) {
             LOG.info("兜底扫描收敛订单 {} 笔", count);
         }
+        orderMetrics.sweep(count);
         return count;
     }
 
