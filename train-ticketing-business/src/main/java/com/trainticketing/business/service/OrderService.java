@@ -126,43 +126,50 @@ public class OrderService {
         if (!acquireIdempotent(req.getMemberId(), req.getIdempotentKey())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_IDEMPOTENT_REPEAT);
         }
-        // 乘车人基础校验：人数上限 + 同单去重（锁外快速失败）
-        validatePassengers(req);
-        // 只读校验放锁外，快速失败
-        DailyTrain dailyTrain = dailyTrainMapper.selectById(req.getDailyTrainId());
-        if (ObjectUtil.isNull(dailyTrain)) {
-            throw new BusinessException(BusinessExceptionEnum.BUSINESS_DAILY_TRAIN_NOT_EXIST);
-        }
-        TrainStation depart = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getDepartStationId());
-        TrainStation arrive = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getArriveStationId());
-        if (ObjectUtil.isNull(depart) || ObjectUtil.isNull(arrive)
-                || depart.getStationIndex() >= arrive.getStationIndex()) {
-            throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
-        }
-        validateRunDateAndStatus(dailyTrain, req);
-        // 分布式锁：同排班同座位类型串行化，不同座位类型可并行
-        String lockKey = TicketLockConfig.lockKey(req.getDailyTrainId(), req.getSeatType());
-        RLock lock = redissonClient.getLock(lockKey);
-        boolean locked = false;
         try {
-            locked = lock.tryLock(TicketLockConfig.LOCK_WAIT_SECONDS, TicketLockConfig.LOCK_LEASE_SECONDS,
-                    java.util.concurrent.TimeUnit.SECONDS);
-            if (!locked) {
+            // 乘车人基础校验：人数上限 + 同单去重（锁外快速失败）
+            validatePassengers(req);
+            // 只读校验放锁外，快速失败
+            DailyTrain dailyTrain = dailyTrainMapper.selectById(req.getDailyTrainId());
+            if (ObjectUtil.isNull(dailyTrain)) {
+                throw new BusinessException(BusinessExceptionEnum.BUSINESS_DAILY_TRAIN_NOT_EXIST);
+            }
+            TrainStation depart = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getDepartStationId());
+            TrainStation arrive = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getArriveStationId());
+            if (ObjectUtil.isNull(depart) || ObjectUtil.isNull(arrive)
+                    || depart.getStationIndex() >= arrive.getStationIndex()) {
+                throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
+            }
+            validateRunDateAndStatus(dailyTrain, req);
+            // 分布式锁：同排班同座位类型串行化，不同座位类型可并行
+            String lockKey = TicketLockConfig.lockKey(req.getDailyTrainId(), req.getSeatType());
+            RLock lock = redissonClient.getLock(lockKey);
+            boolean locked = false;
+            try {
+                locked = lock.tryLock(TicketLockConfig.LOCK_WAIT_SECONDS, TicketLockConfig.LOCK_LEASE_SECONDS,
+                        java.util.concurrent.TimeUnit.SECONDS);
+                if (!locked) {
+                    throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
+                }
+                String orderNo = self.saveInTx(req, dailyTrain, depart, arrive);
+                orderMetrics.submit("sync");
+                return orderNo;
+            } catch (BusinessException e) {
+                orderMetrics.submitReject(e.getE().name());
+                throw e;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
+            } finally {
+                if (locked && lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                }
             }
-            String orderNo = self.saveInTx(req, dailyTrain, depart, arrive);
-            orderMetrics.submit("sync");
-            return orderNo;
-        } catch (BusinessException e) {
-            orderMetrics.submitReject(e.getE().name());
+        } catch (RuntimeException e) {
+            // 业务失败释放幂等占位：占位时未生成有效订单，不释放会导致用户
+            // 在 TTL 窗口内用同一幂等键重试被误判"重复提交"
+            redissonClient.getBucket(idemKey(req.getMemberId(), req.getIdempotentKey())).delete();
             throw e;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
-        } finally {
-            if (locked && lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
         }
     }
 
