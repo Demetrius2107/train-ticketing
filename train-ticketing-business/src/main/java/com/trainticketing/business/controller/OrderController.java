@@ -102,14 +102,17 @@ public class OrderController {
     }
 
     /**
-     * 取消订单（仅待支付订单；释放区间占用，余票恢复）
+     * 取消订单（仅待支付订单；释放区间占用，余票恢复）。
+     * memberId 取自登录态，确保只有订单归属会员可取消。
      *
      * @param orderNo 订单号
+     * @param request HTTP 请求（取登录会员）
      * @return 成功
      */
     @PostMapping("/cancel")
-    public CommonResp<Void> cancel(@org.springframework.web.bind.annotation.RequestParam String orderNo) {
-        orderService.cancel(orderNo);
+    public CommonResp<Void> cancel(@org.springframework.web.bind.annotation.RequestParam String orderNo,
+                                   HttpServletRequest request) {
+        orderService.cancel(orderNo, currentMemberId(request));
         return new CommonResp<>();
     }
 

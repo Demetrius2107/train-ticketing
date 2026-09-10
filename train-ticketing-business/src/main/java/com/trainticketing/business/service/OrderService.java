@@ -287,13 +287,18 @@ public class OrderService {
     /**
      * 取消订单：仅待支付订单可取消；删除明细（释放区间占用）并置状态为已取消（事务）。
      *
-     * @param orderNo 订单号
+     * @param orderNo  订单号
+     * @param memberId 操作会员ID（仅订单归属会员可取消，防越权取消他人订单）
      */
     @Transactional
-    public void cancel(String orderNo) {
+    public void cancel(String orderNo, Long memberId) {
         TrainOrder order = trainOrderMapper.selectByOrderNo(orderNo);
         if (ObjectUtil.isNull(order)) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_NOT_EXIST);
+        }
+        // 仅限订单归属会员取消（与 pay/refund 一致的归属校验）
+        if (ObjectUtil.isNotNull(memberId) && !order.getMemberId().equals(memberId)) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
         }
         if (!OrderStatusEnum.PENDING.getCode().equals(order.getStatus())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
