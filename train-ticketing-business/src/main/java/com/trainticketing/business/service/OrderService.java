@@ -126,6 +126,8 @@ public class OrderService {
         if (!acquireIdempotent(req.getMemberId(), req.getIdempotentKey())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_IDEMPOTENT_REPEAT);
         }
+        // 乘车人基础校验：人数上限 + 同单去重（锁外快速失败）
+        validatePassengers(req);
         // 只读校验放锁外，快速失败
         DailyTrain dailyTrain = dailyTrainMapper.selectById(req.getDailyTrainId());
         if (ObjectUtil.isNull(dailyTrain)) {
@@ -172,6 +174,11 @@ public class OrderService {
      * 幂等占位有效期：5 分钟，覆盖下单+支付窗口
      */
     private static final java.time.Duration IDEM_TTL = java.time.Duration.ofMinutes(5);
+
+    /**
+     * 单笔订单乘车人上限（对齐 12306 单笔订单乘车人数量限制）
+     */
+    private static final int MAX_ORDER_PASSENGERS = 5;
 
     /**
      * 预扣补偿上下文 key 前缀：order:predecr:{orderId}。
@@ -227,6 +234,46 @@ public class OrderService {
     }
 
     /**
+     * 乘车人基础校验（同步/异步下单共用，锁外快速失败）：
+     * 人数不超过上限；同一订单内身份证不得重复。
+     *
+     * @param req 下单请求
+     */
+    private void validatePassengers(OrderSaveReq req) {
+        int size = req.getPassengers().size();
+        if (size > MAX_ORDER_PASSENGERS) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_PASSENGER_TOO_MANY);
+        }
+        long distinct = req.getPassengers().stream()
+                .map(OrderSaveReq.PassengerReq::getIdCard)
+                .distinct()
+                .count();
+        if (distinct < size) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_PASSENGER_DUPLICATE);
+        }
+    }
+
+    /**
+     * 重复购票校验：同车次同乘车日期下，任一身份证已持有与本次区间重叠的车票则拒绝。
+     * 在事务内调用（同步在 saveInTx、异步在出票消费者），尽力拦截并发窗口下的重复购票；
+     * 明细行仅订单存续期存在，无需过滤订单状态。
+     *
+     * @param trainId     车次ID
+     * @param runDate     乘车日期
+     * @param departIndex 出发站序
+     * @param arriveIndex 到达站序
+     * @param idCards     乘车人身份证号列表
+     */
+    private void checkDuplicatePurchase(Long trainId, LocalDate runDate, int departIndex,
+                                        int arriveIndex, List<String> idCards) {
+        Date date = Date.from(runDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+        int count = trainOrderItemMapper.countOverlapByIdCards(trainId, date, idCards, departIndex, arriveIndex);
+        if (count > 0) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_PASSENGER_ALREADY_BOUGHT);
+        }
+    }
+
+    /**
      * 下单事务体：Redis 预扣 + DB 选座（行锁兜底）+ 生成订单/明细。
      * 由 {@link #save} 持分布式锁后通过 self 代理调用，保证 @Transactional 代理生效。
      *
@@ -262,6 +309,10 @@ public class OrderService {
         if (ObjectUtil.isNull(trainPrice)) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_TRAIN_PRICE_NOT_EXIST);
         }
+        // 重复购票校验：同车次同日期区间重叠的既有车票（事务内，尽力拦截并发窗口）
+        checkDuplicatePurchase(dailyTrain.getTrainId(), req.getRunDate(),
+                depart.getStationIndex(), arrive.getStationIndex(),
+                req.getPassengers().stream().map(OrderSaveReq.PassengerReq::getIdCard).toList());
         // 生成订单
         long now = System.currentTimeMillis();
         TrainOrder order = new TrainOrder();
@@ -501,6 +552,8 @@ public class OrderService {
             orderMetrics.idempotentHit();
             return prev;
         }
+        // 乘车人基础校验：人数上限 + 同单去重（请求线程快速失败）
+        validatePassengers(req);
         // 2. 只读校验放请求线程快速失败：排班、站序、票价（与同步链路一致）
         DailyTrain dailyTrain = dailyTrainMapper.selectById(req.getDailyTrainId());
         if (ObjectUtil.isNull(dailyTrain)) {
@@ -709,6 +762,11 @@ public class OrderService {
             LOG.info("订单已非出票中状态，放弃出票 orderNo={}, status={}", order.getOrderNo(), order.getStatus());
             return;
         }
+        // 重复购票校验（消费端权威校验）：生产者预检与出票之间时间窗大，重复购票在此终态拦截
+        LocalDate runDate = order.getRunDate().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+        checkDuplicatePurchase(order.getTrainId(), runDate,
+                message.getDepartIndex(), message.getArriveIndex(),
+                message.getPassengers().stream().map(OrderCreateMessage.Passenger::getIdCard).toList());
         // 2. DB 行锁选座 + 贪心分配（站序已由生产者校验，随消息透传）
         int need = message.getPassengers().size();
         List<DailyTrainSeat> availableSeats = dailyTrainSeatMapper.selectAllAvailableForUpdate(

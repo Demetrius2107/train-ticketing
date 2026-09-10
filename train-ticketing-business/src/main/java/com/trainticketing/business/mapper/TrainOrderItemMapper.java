@@ -39,4 +39,22 @@ public interface TrainOrderItemMapper {
    * @return 影响行数
    */
   int deleteByOrderId(@Param("orderId") Long orderId);
+
+  /**
+   * 重复购票校验：统计指定车次/乘车日期下，给定身份证集合中已持有
+   * 与 [departIndex, arriveIndex] 区间重叠车票的数量。
+   * 明细行只在订单存续期存在（取消/退票/关单即删除），故无需再过滤订单状态。
+   *
+   * @param trainId     车次ID
+   * @param runDate     乘车日期
+   * @param idCards     身份证号列表
+   * @param departIndex 出发站序
+   * @param arriveIndex 到达站序
+   * @return 命中的既有车票数
+   */
+  int countOverlapByIdCards(@Param("trainId") Long trainId,
+                            @Param("runDate") java.util.Date runDate,
+                            @Param("idCards") List<String> idCards,
+                            @Param("departIndex") Integer departIndex,
+                            @Param("arriveIndex") Integer arriveIndex);
 }

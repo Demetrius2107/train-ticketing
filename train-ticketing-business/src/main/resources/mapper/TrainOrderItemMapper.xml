@@ -39,4 +39,19 @@
     delete from train_order_item
     where order_id = #{orderId,jdbcType=BIGINT}
   </delete>
+  <!-- 重复购票校验：明细行仅订单存续期存在（取消/退票/关单即删除），无需过滤订单状态；
+       区间重叠判断与余票模型一致（depart_index < 待购到达序 且 arrive_index > 待购出发序） -->
+  <select id="countOverlapByIdCards" resultType="int">
+    select count(1)
+    from train_order_item oi
+    join train_order o on o.id = oi.order_id
+    where o.train_id = #{trainId,jdbcType=BIGINT}
+      and o.run_date = #{runDate,jdbcType=DATE}
+      and oi.id_card in
+      <foreach collection="idCards" item="idCard" open="(" separator="," close=")">
+        #{idCard,jdbcType=VARCHAR}
+      </foreach>
+      and oi.depart_index &lt; #{arriveIndex,jdbcType=INTEGER}
+      and oi.arrive_index &gt; #{departIndex,jdbcType=INTEGER}
+  </select>
 </mapper>
