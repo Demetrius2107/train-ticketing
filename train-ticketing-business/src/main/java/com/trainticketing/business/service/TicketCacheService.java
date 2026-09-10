@@ -62,17 +62,25 @@ public class TicketCacheService {
                     + "return 1";
 
     /**
-     * Lua 多段回补脚本：ARGV[1]=回补数量，ARGV[2..]=各相邻段 field
+     * Lua 多段回补脚本：ARGV[1]=回补数量，ARGV[2..]=各相邻段 field。
+     * 仅对已存在的字段 HINCRBY；缺失字段（缓存丢失/未回填）不盲加——从 0 起算会造成低计少卖，
+     * 而是记录其下标返回给调用方，由 Java 侧按 DB 回填（调用时机均在 DB 提交后，
+     * 回填值已含本次释放量，故直接取 DB 值、不再叠加 count）。
      */
     private static final String INCR_SCRIPT =
             "local count = tonumber(ARGV[1]) "
+                    + "local missing = {} "
                     + "for i = 2, #ARGV do "
-                    + "  redis.call('HINCRBY', KEYS[1], ARGV[i], count) "
+                    + "  if redis.call('HEXISTS', KEYS[1], ARGV[i]) == 1 then "
+                    + "    redis.call('HINCRBY', KEYS[1], ARGV[i], count) "
+                    + "  else "
+                    + "    missing[#missing + 1] = i - 2 "
+                    + "  end "
                     + "end "
-                    + "return 1";
+                    + "return missing";
 
     private final DefaultRedisScript<Long> decrScript = new DefaultRedisScript<>(DECR_SCRIPT, Long.class);
-    private final DefaultRedisScript<Long> incrScript = new DefaultRedisScript<>(INCR_SCRIPT, Long.class);
+    private final DefaultRedisScript<List> incrScript = new DefaultRedisScript<>(INCR_SCRIPT, List.class);
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -228,6 +236,9 @@ public class TicketCacheService {
 
     /**
      * Lua 原子回补区间余票（订单取消/超时/退款释放占用时调用，按释放数量回补路径各段）。
+     * <p>已存在的字段直接 HINCRBY；缺失字段不盲加（从 0 起算会低计少卖），而是按 DB
+     * 该相邻段可售数回填——调用时机均在 DB 提交之后（afterCommit / 消费端事务外），
+     * 回填值已含本次释放量，故直接取 DB 值、不再叠加 count。
      *
      * @param dailyTrainId 排班ID
      * @param seatType     座位类型
@@ -243,13 +254,44 @@ public class TicketCacheService {
             for (int seg : segments) {
                 argv.add(remainField(seg));
             }
-            stringRedisTemplate.execute(incrScript,
-                    Arrays.asList(remainKey(dailyTrainId, seatType)),
+            String key = remainKey(dailyTrainId, seatType);
+            List<?> ret = stringRedisTemplate.execute(incrScript,
+                    Arrays.asList(key),
                     argv.toArray());
+            if (CollUtil.isEmpty(ret)) {
+                return;
+            }
+            // 缺失段回源 DB 回填（不叠加 count，见方法注释）
+            for (Object idx : ret) {
+                int segIndex = Integer.parseInt(String.valueOf(idx));
+                int seg = segments.get(segIndex);
+                int segCount = queryDbSegmentRemaining(dailyTrainId, seatType, seg);
+                stringRedisTemplate.opsForHash().put(key, remainField(seg), String.valueOf(segCount));
+                LOG.info("余票回补遇缺失段，回源DB回填 key={}, 段={}, count={}", key, remainField(seg), segCount);
+            }
         } catch (Exception e) {
             LOG.error("Lua 回补余票失败 dailyTrainId={}, seatType={}, [{}-{}], error={}",
                     dailyTrainId, seatType, departIndex, arriveIndex, e.getMessage());
         }
+    }
+
+    /**
+     * 查询 DB 某相邻段 [seg, seg+1] 指定座位类型的可售数（与对账逻辑一致）。
+     *
+     * @param dailyTrainId 排班ID
+     * @param seatType     座位类型
+     * @param seg          相邻段起点站序
+     * @return 可售数（无该类型座位返回 0）
+     */
+    private int queryDbSegmentRemaining(Long dailyTrainId, String seatType, int seg) {
+        List<SeatRemainingResp> remaining = dailyTrainSeatMapper.selectRemainingByInterval(
+                dailyTrainId, seg, seg + 1);
+        for (SeatRemainingResp resp : remaining) {
+            if (seatType.equals(resp.getSeatType())) {
+                return resp.getRemainingCount().intValue();
+            }
+        }
+        return 0;
     }
 
     /**
