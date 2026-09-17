@@ -67,6 +67,14 @@ public class OrderCreateConsumer implements RocketMQListener<OrderCreateMessage>
                 LOG.info("出票失败（余票耗尽）已终态化 orderNo={}, 本次处理={}", message.getOrderNo(), handled);
                 return;
             }
+            if (BusinessExceptionEnum.BUSINESS_ORDER_PASSENGER_ALREADY_BOUGHT == e.getE()) {
+                // 确定性失败：重复购票（生产者预检与出票之间他人已购同行程），终态化 + 回补，不重试
+                boolean handled = orderService.failQueuingOrder(message.getOrderId(), message.getDailyTrainId(),
+                        message.getSeatType(), message.getDepartIndex(), message.getArriveIndex(),
+                        message.getPassengers().size());
+                LOG.info("出票失败（重复购票）已终态化 orderNo={}, 本次处理={}", message.getOrderNo(), handled);
+                return;
+            }
             if (BusinessExceptionEnum.BUSINESS_ORDER_CONCURRENT_CONFLICT == e.getE()) {
                 // 订单状态已被兜底扫描接管（出票中→出票失败），本次事务已回滚，ACK 放弃
                 LOG.info("出票放弃（订单已被兜底扫描终态化） orderNo={}", message.getOrderNo());

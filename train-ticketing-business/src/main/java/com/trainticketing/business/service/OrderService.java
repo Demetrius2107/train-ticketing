@@ -13,6 +13,7 @@ import com.trainticketing.business.domain.TrainOrder;
 import com.trainticketing.business.domain.TrainOrderItem;
 import com.trainticketing.business.domain.TrainPrice;
 import com.trainticketing.business.domain.TrainStation;
+import com.trainticketing.business.enums.DailyTrainStatusEnum;
 import com.trainticketing.business.enums.OrderStatusEnum;
 import com.trainticketing.business.mapper.DailyTrainMapper;
 import com.trainticketing.business.mapper.DailyTrainSeatMapper;
@@ -30,6 +31,7 @@ import com.trainticketing.common.exception.BusinessExceptionEnum;
 import jakarta.annotation.Resource;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
@@ -124,40 +126,50 @@ public class OrderService {
         if (!acquireIdempotent(req.getMemberId(), req.getIdempotentKey())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_IDEMPOTENT_REPEAT);
         }
-        // 只读校验放锁外，快速失败
-        DailyTrain dailyTrain = dailyTrainMapper.selectById(req.getDailyTrainId());
-        if (ObjectUtil.isNull(dailyTrain)) {
-            throw new BusinessException(BusinessExceptionEnum.BUSINESS_DAILY_TRAIN_NOT_EXIST);
-        }
-        TrainStation depart = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getDepartStationId());
-        TrainStation arrive = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getArriveStationId());
-        if (ObjectUtil.isNull(depart) || ObjectUtil.isNull(arrive)
-                || depart.getStationIndex() >= arrive.getStationIndex()) {
-            throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
-        }
-        // 分布式锁：同排班同座位类型串行化，不同座位类型可并行
-        String lockKey = TicketLockConfig.lockKey(req.getDailyTrainId(), req.getSeatType());
-        RLock lock = redissonClient.getLock(lockKey);
-        boolean locked = false;
         try {
-            locked = lock.tryLock(TicketLockConfig.LOCK_WAIT_SECONDS, TicketLockConfig.LOCK_LEASE_SECONDS,
-                    java.util.concurrent.TimeUnit.SECONDS);
-            if (!locked) {
+            // 乘车人基础校验：人数上限 + 同单去重（锁外快速失败）
+            validatePassengers(req);
+            // 只读校验放锁外，快速失败
+            DailyTrain dailyTrain = dailyTrainMapper.selectById(req.getDailyTrainId());
+            if (ObjectUtil.isNull(dailyTrain)) {
+                throw new BusinessException(BusinessExceptionEnum.BUSINESS_DAILY_TRAIN_NOT_EXIST);
+            }
+            TrainStation depart = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getDepartStationId());
+            TrainStation arrive = trainStationMapper.selectByStation(dailyTrain.getTrainId(), req.getArriveStationId());
+            if (ObjectUtil.isNull(depart) || ObjectUtil.isNull(arrive)
+                    || depart.getStationIndex() >= arrive.getStationIndex()) {
+                throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
+            }
+            validateRunDateAndStatus(dailyTrain, req);
+            // 分布式锁：同排班同座位类型串行化，不同座位类型可并行
+            String lockKey = TicketLockConfig.lockKey(req.getDailyTrainId(), req.getSeatType());
+            RLock lock = redissonClient.getLock(lockKey);
+            boolean locked = false;
+            try {
+                locked = lock.tryLock(TicketLockConfig.LOCK_WAIT_SECONDS, TicketLockConfig.LOCK_LEASE_SECONDS,
+                        java.util.concurrent.TimeUnit.SECONDS);
+                if (!locked) {
+                    throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
+                }
+                String orderNo = self.saveInTx(req, dailyTrain, depart, arrive);
+                orderMetrics.submit("sync");
+                return orderNo;
+            } catch (BusinessException e) {
+                orderMetrics.submitReject(e.getE().name());
+                throw e;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
+            } finally {
+                if (locked && lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                }
             }
-            String orderNo = self.saveInTx(req, dailyTrain, depart, arrive);
-            orderMetrics.submit("sync");
-            return orderNo;
-        } catch (BusinessException e) {
-            orderMetrics.submitReject(e.getE().name());
+        } catch (RuntimeException e) {
+            // 业务失败释放幂等占位：占位时未生成有效订单，不释放会导致用户
+            // 在 TTL 窗口内用同一幂等键重试被误判"重复提交"
+            redissonClient.getBucket(idemKey(req.getMemberId(), req.getIdempotentKey())).delete();
             throw e;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_LOCK_BUSY);
-        } finally {
-            if (locked && lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
         }
     }
 
@@ -169,6 +181,11 @@ public class OrderService {
      * 幂等占位有效期：5 分钟，覆盖下单+支付窗口
      */
     private static final java.time.Duration IDEM_TTL = java.time.Duration.ofMinutes(5);
+
+    /**
+     * 单笔订单乘车人上限（对齐 12306 单笔订单乘车人数量限制）
+     */
+    private static final int MAX_ORDER_PASSENGERS = 5;
 
     /**
      * 预扣补偿上下文 key 前缀：order:predecr:{orderId}。
@@ -202,6 +219,65 @@ public class OrderService {
      */
     private String idemKey(Long memberId, String idempotentKey) {
         return IDEM_KEY_PREFIX + memberId + ":" + idempotentKey;
+    }
+
+    /**
+     * 排班状态与乘车日期校验（同步/异步下单共用）：
+     * 仅运行中排班可售；乘车日期必须与排班日期一致，且不得早于当天。
+     *
+     * @param dailyTrain 排班
+     * @param req        下单请求
+     */
+    private void validateRunDateAndStatus(DailyTrain dailyTrain, OrderSaveReq req) {
+        if (!DailyTrainStatusEnum.RUN.getCode().equals(dailyTrain.getStatus())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_DAILY_TRAIN_NOT_RUNNING);
+        }
+        if (!dailyTrain.getRunDate().equals(req.getRunDate())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_RUN_DATE_MISMATCH);
+        }
+        if (req.getRunDate().isBefore(LocalDate.now())) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_RUN_DATE_EXPIRED);
+        }
+    }
+
+    /**
+     * 乘车人基础校验（同步/异步下单共用，锁外快速失败）：
+     * 人数不超过上限；同一订单内身份证不得重复。
+     *
+     * @param req 下单请求
+     */
+    private void validatePassengers(OrderSaveReq req) {
+        int size = req.getPassengers().size();
+        if (size > MAX_ORDER_PASSENGERS) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_PASSENGER_TOO_MANY);
+        }
+        long distinct = req.getPassengers().stream()
+                .map(OrderSaveReq.PassengerReq::getIdCard)
+                .distinct()
+                .count();
+        if (distinct < size) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_PASSENGER_DUPLICATE);
+        }
+    }
+
+    /**
+     * 重复购票校验：同车次同乘车日期下，任一身份证已持有与本次区间重叠的车票则拒绝。
+     * 在事务内调用（同步在 saveInTx、异步在出票消费者），尽力拦截并发窗口下的重复购票；
+     * 明细行仅订单存续期存在，无需过滤订单状态。
+     *
+     * @param trainId     车次ID
+     * @param runDate     乘车日期
+     * @param departIndex 出发站序
+     * @param arriveIndex 到达站序
+     * @param idCards     乘车人身份证号列表
+     */
+    private void checkDuplicatePurchase(Long trainId, LocalDate runDate, int departIndex,
+                                        int arriveIndex, List<String> idCards) {
+        Date date = Date.from(runDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+        int count = trainOrderItemMapper.countOverlapByIdCards(trainId, date, idCards, departIndex, arriveIndex);
+        if (count > 0) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_PASSENGER_ALREADY_BOUGHT);
+        }
     }
 
     /**
@@ -240,6 +316,10 @@ public class OrderService {
         if (ObjectUtil.isNull(trainPrice)) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_TRAIN_PRICE_NOT_EXIST);
         }
+        // 重复购票校验：同车次同日期区间重叠的既有车票（事务内，尽力拦截并发窗口）
+        checkDuplicatePurchase(dailyTrain.getTrainId(), req.getRunDate(),
+                depart.getStationIndex(), arrive.getStationIndex(),
+                req.getPassengers().stream().map(OrderSaveReq.PassengerReq::getIdCard).toList());
         // 生成订单
         long now = System.currentTimeMillis();
         TrainOrder order = new TrainOrder();
@@ -287,13 +367,18 @@ public class OrderService {
     /**
      * 取消订单：仅待支付订单可取消；删除明细（释放区间占用）并置状态为已取消（事务）。
      *
-     * @param orderNo 订单号
+     * @param orderNo  订单号
+     * @param memberId 操作会员ID（仅订单归属会员可取消，防越权取消他人订单）
      */
     @Transactional
-    public void cancel(String orderNo) {
+    public void cancel(String orderNo, Long memberId) {
         TrainOrder order = trainOrderMapper.selectByOrderNo(orderNo);
         if (ObjectUtil.isNull(order)) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_NOT_EXIST);
+        }
+        // 仅限订单归属会员取消（与 pay/refund 一致的归属校验）
+        if (ObjectUtil.isNotNull(memberId) && !order.getMemberId().equals(memberId)) {
+            throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
         }
         if (!OrderStatusEnum.PENDING.getCode().equals(order.getStatus())) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_ORDER_STATUS_INVALID);
@@ -474,6 +559,8 @@ public class OrderService {
             orderMetrics.idempotentHit();
             return prev;
         }
+        // 乘车人基础校验：人数上限 + 同单去重（请求线程快速失败）
+        validatePassengers(req);
         // 2. 只读校验放请求线程快速失败：排班、站序、票价（与同步链路一致）
         DailyTrain dailyTrain = dailyTrainMapper.selectById(req.getDailyTrainId());
         if (ObjectUtil.isNull(dailyTrain)) {
@@ -485,6 +572,7 @@ public class OrderService {
                 || depart.getStationIndex() >= arrive.getStationIndex()) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_STATION_INDEX_INVALID);
         }
+        validateRunDateAndStatus(dailyTrain, req);
         TrainPrice trainPrice = trainPriceMapper.selectByTrainAndType(dailyTrain.getTrainId(), req.getSeatType());
         if (ObjectUtil.isNull(trainPrice)) {
             throw new BusinessException(BusinessExceptionEnum.BUSINESS_TRAIN_PRICE_NOT_EXIST);
@@ -681,6 +769,11 @@ public class OrderService {
             LOG.info("订单已非出票中状态，放弃出票 orderNo={}, status={}", order.getOrderNo(), order.getStatus());
             return;
         }
+        // 重复购票校验（消费端权威校验）：生产者预检与出票之间时间窗大，重复购票在此终态拦截
+        LocalDate runDate = order.getRunDate().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+        checkDuplicatePurchase(order.getTrainId(), runDate,
+                message.getDepartIndex(), message.getArriveIndex(),
+                message.getPassengers().stream().map(OrderCreateMessage.Passenger::getIdCard).toList());
         // 2. DB 行锁选座 + 贪心分配（站序已由生产者校验，随消息透传）
         int need = message.getPassengers().size();
         List<DailyTrainSeat> availableSeats = dailyTrainSeatMapper.selectAllAvailableForUpdate(
